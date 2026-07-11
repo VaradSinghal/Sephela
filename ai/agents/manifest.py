@@ -187,7 +187,7 @@ Analyze and output a complete ManifestAnalysis object."""
         # Validate and construct
         return ManifestAnalysis(**data)
     
-    def extract_findings(self, output: ManifestAnalysis) -> list[Finding]::
+    def extract_findings(self, output: ManifestAnalysis) -> list[Finding]:
         findings = []
         findings.extend(output.permissions)  # PermissionFinding extends Finding
         

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Any
+from enum import Enum
 from pydantic import BaseModel, Field
 
 
@@ -42,7 +43,7 @@ class RiskBreakdown(BaseModel):
         assert abs(computed - self.final_score) < 0.01, f"Score mismatch: {computed} != {self.final_score}"
 
 
-class RiskTier(str):
+class RiskTier(str, Enum):
     """Risk tier classification."""
     benign = "benign"
     suspicious = "suspicious"
@@ -50,7 +51,7 @@ class RiskTier(str):
     critical = "critical"
 
     @classmethod
-    def from_score(cls, score: float) -> RiskTier:
+    def from_score(cls, score: float) -> "RiskTier":
         if score >= 90:
             return cls.critical
         elif score >= 70:

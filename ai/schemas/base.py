@@ -18,7 +18,7 @@ class Severity(str, Enum):
     critical = "critical"
 
     @property
-def weight(self) -> float:
+    def weight(self) -> float:
         """Numeric weight for risk scoring."""
         return {
             Severity.info: 0.1,
@@ -37,7 +37,7 @@ class Confidence(str, Enum):
     very_high = "very_high"
 
     @property
-def score(self) -> float:
+    def score(self) -> float:
         return {
             Confidence.low: 0.3,
             Confidence.medium: 0.6,
@@ -69,7 +69,7 @@ class Finding(BaseModel):
 
     @field_validator("id", mode="before")
     @classmethod
-def _gen_id(cls, v: str | None) -> str:
+    def _gen_id(cls, v: str | None) -> str:
         return v or f"finding_{uuid4().hex[:12]}"
 
 

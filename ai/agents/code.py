@@ -203,5 +203,4 @@ Analyze and output a complete CodeAnalysis object with:
         findings = []
         findings.extend(output.control_flow_findings)
         findings.extend(output.api_usage_findings)
-        return findings
-```
+        return findings

@@ -9,7 +9,7 @@ from typing import Any
 from pydantic import BaseModel
 
 from ai.schemas.base import Finding, Severity
-from ai.schemas.report import ReportAnalysis, ReportSection, ExecutiveSummary, TechnicalDetails, EvidenceCatalog, ComplianceMapping, AnalysisReport, ReportFormat, ReportGenerationRequest, ReportGenerationResult
+from ai.schemas.report import ReportSection, ExecutiveSummary, TechnicalDetails, EvidenceCatalog, ComplianceMapping, AnalysisReport, ReportFormat, ReportGenerationResult
 from ai.agents.base import BaseAgent, AgentConfig, AgentResult
 
 
@@ -170,7 +170,7 @@ def generate_report_deterministic(evidence: dict[str, Any], context: dict[str, A
 
     # Build sections
     sections = [
-        ReportSection(section_id="ex_id="exec_summary", title="Executive Summary", content=exec_summary.overview, order=1),
+        ReportSection(section_id="exec_summary", title="Executive Summary", content=exec_summary.overview, order=1),
         ReportSection(section_id="risk_score", title="Risk Score & Classification", content=f"Score: {score}/100, Tier: {tier}, Category: {category}", order=2),
         ReportSection(section_id="technical", title="Technical Analysis", content="See technical_details", order=3),
         ReportSection(section_id="iocs", title="Indicators of Compromise", content="See evidence_catalog", order=4),
