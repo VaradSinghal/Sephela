@@ -111,12 +111,20 @@ def create_analysis_graph(registry: AgentRegistry, checkpointer: Optional[BaseCh
     for agent_name in agent_order:
         agent = registry.get(agent_name)
         if agent and agent.config.enabled:
+            # Find next enabled agent
+            next_agent = END
+            for next_name in agent_order[agent_order.index(agent_name) + 1:]:
+                next_obj = registry.get(next_name)
+                if next_obj and next_obj.config.enabled:
+                    next_agent = next_name
+                    break
+
             workflow.add_conditional_edges(
                 agent_name,
                 should_retry,
                 {
                     "retry": agent_name,
-                    "continue": agent_order[agent_order.index(agent_name) + 1] if agent_order.index(agent_name) + 1 < len(agent_order) else END,
+                    "continue": next_agent,
                     "error": END,
                 }
             )

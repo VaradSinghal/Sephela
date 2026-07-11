@@ -28,6 +28,16 @@ class Severity(str, Enum):
             Severity.critical: 1.0,
         }[self]
 
+    def __lt__(self, other: Any) -> bool:
+        if isinstance(other, Severity):
+            return self.weight < other.weight
+        return NotImplemented
+
+    def __gt__(self, other: Any) -> bool:
+        if isinstance(other, Severity):
+            return self.weight > other.weight
+        return NotImplemented
+
 
 class Confidence(str, Enum):
     """Confidence levels for findings."""
@@ -44,6 +54,16 @@ class Confidence(str, Enum):
             Confidence.high: 0.85,
             Confidence.very_high: 0.95,
         }[self]
+
+    def __lt__(self, other: Any) -> bool:
+        if isinstance(other, Confidence):
+            return self.score < other.score
+        return NotImplemented
+
+    def __gt__(self, other: Any) -> bool:
+        if isinstance(other, Confidence):
+            return self.score > other.score
+        return NotImplemented
 
 
 class EvidenceRef(BaseModel):

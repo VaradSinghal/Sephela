@@ -16,13 +16,18 @@ from ai.orchestration.state import PipelineStatus
 from ai.agents.base import AgentRegistry, BaseAgent, AgentConfig, AgentResult, AgentStatus
 
 
+from pydantic import BaseModel
+
+class DummyOutput(BaseModel):
+    pass
+
 class MockAgent(BaseAgent):
     """Mock agent for testing."""
 
     def __init__(self, name: str, should_fail: bool = False):
         config = AgentConfig(
             name=name,
-            output_schema=dict,
+            output_schema=DummyOutput,
         )
         super().__init__(config, None)
         self.should_fail = should_fail
@@ -91,7 +96,7 @@ class TestAnalysisState:
 class TestCreateAgentNode:
     """Test agent node creation."""
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_successful_agent_execution(self, mock_registry):
         agent = mock_registry.get("manifest_agent")
         node = create_agent_node(agent)
@@ -109,7 +114,7 @@ class TestCreateAgentNode:
         assert result.current_agent == "manifest_agent"
         assert "manifest_agent" in result.agent_results
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_failed_agent_execution(self):
         agent = MockAgent("failing_agent", should_fail=True)
         node = create_agent_node(agent)
@@ -184,7 +189,7 @@ class TestCreateAnalysisGraph:
 class TestRunAnalysisPipeline:
     """Test pipeline execution."""
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_pipeline_execution(self, mock_registry):
         with patch("ai.orchestration.graph.create_analysis_graph") as mock_create:
             mock_graph = AsyncMock()
@@ -210,4 +215,3 @@ class TestRunAnalysisPipeline:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
-```
