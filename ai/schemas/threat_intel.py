@@ -74,7 +74,7 @@ class ThreatIntelAnalysis(BaseModel):
     campaigns: list[str] = Field(default_factory=list)
     
     # Connections
-    connections: list[TiConnection] = Field(default_factory=list)
+    connections: list[TIConnection] = Field(default_factory=list)
     
     # All findings
     findings: list[Finding] = Field(default_factory=list)

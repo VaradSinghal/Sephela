@@ -115,9 +115,7 @@ class TestPermissionSchemas:
 
     def test_permission_analysis(self):
         analysis = PermissionAnalysis(
-            total_permissions=10,
-            critical_count=1,
-            high_count=3,
+            dangerous_permissions=[PermissionRisk(permission="SMS", protection_level="dangerous", risk_score=1.0, severity=Severity.critical, confidence=Confidence.high, rationale="") for _ in range(10)],
             financial_risk_score=0.85,
         )
         assert analysis.total_permissions == 10
@@ -232,12 +230,10 @@ class TestNetworkSchemas:
 
     def test_network_analysis(self):
         analysis = NetworkAnalysis(
+            domain_intel=[DomainIntel(domain="malicious.tk", is_malicious=True, categories=[], reputation_score=1.0, is_dga=False, is_newly_registered=False)],
             domains=["example.com", "malicious.tk"],
             ips=["1.2.3.4"],
             findings=[],
-            malicious_domain_count=1,
-            critical_findings=0,
-            high_findings=1,
         )
         assert len(analysis.domains) == 2
         assert analysis.malicious_domain_count == 1
@@ -273,9 +269,7 @@ class TestThreatIntelSchemas:
 
     def test_threat_intel_analysis(self):
         analysis = ThreatIntelAnalysis(
-            total_ioc_matches=5,
-            family_attributions=1,
-            critical_findings=2,
+            hash_matches=[IOCMatch(indicator="a", indicator_type="hash", source="OTX", confidence=Confidence.high, severity=Severity.high, tags=[], malware_families=[]) for _ in range(5)],
         )
         assert analysis.total_ioc_matches == 5
 
@@ -287,7 +281,7 @@ class TestRiskSchemas:
         factor = RiskFactor(
             factor_id="static_permissions",
             name="Static Permissions",
-            category="static",
+            category="permissions",
             weight=0.15,
             raw_score=80.0,
             weighted_contribution=12.0,
@@ -301,9 +295,9 @@ class TestRiskSchemas:
 
     def test_risk_breakdown(self):
         breakdown = RiskBreakdown(
-            factors=[],
+            factors=[RiskFactor(factor_id="1", name="1", category="permissions", weight=1.0, raw_score=85.0, weighted_contribution=85.0)],
             total_weight=1.0,
-            base_score=75.0,
+            base_score=85.0,
             final_score=85.0,
             scoring_version="1.0",
             computed_at="2024-01-01T00:00:00Z",
@@ -323,30 +317,31 @@ class TestRiskSchemas:
             tier=RiskTier.malicious,
             confidence=0.9,
             breakdown=RiskBreakdown(
-                factors=[],
+                factors=[RiskFactor(factor_id="1", name="1", category="permissions", weight=1.0, raw_score=85.0, weighted_contribution=85.0)],
                 total_weight=1.0,
                 base_score=85.0,
                 final_score=85.0,
+                computed_at="2024-01-01T00:00:00Z",
+                confidence=0.9,
             ),
-            primary_category="banking_trojan",
         )
         assert analysis.score == 85.0
         assert analysis.tier == RiskTier.malicious
 
 
 class TestReportSchemas:
-    """Test report generation schemas."""
+    """Test final report schemas."""
 
     def test_executive_summary(self):
         summary = ExecutiveSummary(
             overview="Test overview",
-            risk_score=85.0,
-            risk_tier="malicious",
-            key_findings=["Finding 1", "Finding 2"],
-            business_impact="High impact",
-            recommended_actions=["Action 1", "Action 2"],
+            risk_score=95.0,
+            risk_tier="critical",
+            primary_category="Banking Trojan",
+            key_findings=["Test", "Test2"],
+            mitre_tactics=["TA0001", "TA0002"],
         )
-        assert summary.risk_score == 85.0
+        assert summary.risk_score == 95.0
         assert len(summary.key_findings) == 2
 
     def test_report_format(self):
@@ -376,4 +371,3 @@ class TestReportSchemas:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
-```"

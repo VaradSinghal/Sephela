@@ -18,7 +18,7 @@ class Severity(str, Enum):
     critical = "critical"
 
     @property
-def weight(self) -> float:
+    def weight(self) -> float:
         """Numeric weight for risk scoring."""
         return {
             Severity.info: 0.1,
@@ -27,6 +27,16 @@ def weight(self) -> float:
             Severity.high: 0.75,
             Severity.critical: 1.0,
         }[self]
+
+    def __lt__(self, other: Any) -> bool:
+        if isinstance(other, Severity):
+            return self.weight < other.weight
+        return NotImplemented
+
+    def __gt__(self, other: Any) -> bool:
+        if isinstance(other, Severity):
+            return self.weight > other.weight
+        return NotImplemented
 
 
 class Confidence(str, Enum):
@@ -37,13 +47,23 @@ class Confidence(str, Enum):
     very_high = "very_high"
 
     @property
-def score(self) -> float:
+    def score(self) -> float:
         return {
             Confidence.low: 0.3,
             Confidence.medium: 0.6,
             Confidence.high: 0.85,
             Confidence.very_high: 0.95,
         }[self]
+
+    def __lt__(self, other: Any) -> bool:
+        if isinstance(other, Confidence):
+            return self.score < other.score
+        return NotImplemented
+
+    def __gt__(self, other: Any) -> bool:
+        if isinstance(other, Confidence):
+            return self.score > other.score
+        return NotImplemented
 
 
 class EvidenceRef(BaseModel):
@@ -69,7 +89,7 @@ class Finding(BaseModel):
 
     @field_validator("id", mode="before")
     @classmethod
-def _gen_id(cls, v: str | None) -> str:
+    def _gen_id(cls, v: str | None) -> str:
         return v or f"finding_{uuid4().hex[:12]}"
 
 

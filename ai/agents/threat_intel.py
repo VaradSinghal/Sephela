@@ -8,7 +8,7 @@ from typing import Any
 from pydantic import BaseModel
 
 from ai.schemas.base import Finding, Severity, Confidence, EvidenceRef
-from ai.schemas.threat_intel import ThreatIntelAnalysis, MalwareFamily, IOCMatch, ThreatActor, TiConnection
+from ai.schemas.threat_intel import ThreatIntelAnalysis, MalwareFamily, IOCMatch, ThreatActor, TIConnection
 from ai.agents.base import BaseAgent, AgentConfig, AgentResult
 
 
@@ -194,7 +194,7 @@ def analyze_threat_intel_deterministic(evidence: dict[str, Any], ti_cache: dict[
                     target_sectors=["financial"],
                     target_regions=["global"],
                 ))
-                findings.append(TiConnection(
+                findings.append(TIConnection(
                     id=f"family:{fam}",
                     type="threat_intel",
                     severity=Severity.critical,
@@ -205,7 +205,6 @@ def analyze_threat_intel_deterministic(evidence: dict[str, Any], ti_cache: dict[
                     connection_type="family_attribution",
                     ioc_matches=hash_matches,
                     malware_families=[malware_families[-1]],
-                    confidence=Confidence.very_high,
                     mitre_techniques=mf["mitre"],
                     owasp_mobile=["M1", "M3", "M5"],
                 ))

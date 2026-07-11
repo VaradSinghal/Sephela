@@ -14,7 +14,7 @@ from pydantic import BaseModel, ValidationError
 
 from ai.schemas.base import Finding, Severity, EvidenceRef
 from ai.schemas.manifest import ManifestAnalysis
-from ai.schemas.permissions import PermissionsAnalysis
+from ai.schemas.permission import PermissionAnalysis
 from ai.schemas.code import CodeAnalysis
 from ai.schemas.network import NetworkAnalysis
 from ai.schemas.threat_intel import ThreatIntelAnalysis

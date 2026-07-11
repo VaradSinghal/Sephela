@@ -350,5 +350,4 @@ def _get_capabilities(group: str, risks: list[PermissionRisk]) -> list[str]:
         "BLUETOOTH": ["proximity_attack", "bluetooth_exploit"],
         "NFC": ["nfc_relay", "payment_theft"],
     }
-    return caps.get(group, [])
-```
+    return caps.get(group, [])
