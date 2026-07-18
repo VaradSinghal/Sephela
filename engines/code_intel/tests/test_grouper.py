@@ -68,8 +68,12 @@ def test_grouper_with_classes() -> None:
     groups = result.evidence["groups"]
 
     assert isinstance(groups, dict)
-    assert result.evidence["group_count"] > 0
-    assert result.evidence["total_classified"] == 5
+    count = result.evidence["group_count"]
+    total = result.evidence["total_classified"]
+    assert isinstance(count, int)
+    assert isinstance(total, int)
+    assert count > 0
+    assert total == 5
 
 
 def test_grouper_empty_classes() -> None:
@@ -80,4 +84,6 @@ def test_grouper_empty_classes() -> None:
         "developer_source_paths": [],
     }
     result = GrouperAnalyzer().analyze(ctx)
-    assert result.evidence["total_classified"] == 0
+    total = result.evidence["total_classified"]
+    assert isinstance(total, int)
+    assert total == 0

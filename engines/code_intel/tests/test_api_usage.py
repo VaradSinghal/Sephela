@@ -31,8 +31,12 @@ def test_sms_api_detected(tmp_path: Path) -> None:
     )
     result = ApiUsageAnalyzer().analyze(ctx)
 
-    assert "sms_access" in result.evidence["categories_detected"]
-    assert result.evidence["total_findings"] > 0
+    categories = result.evidence["categories_detected"]
+    total = result.evidence["total_findings"]
+    assert isinstance(categories, list)
+    assert isinstance(total, int)
+    assert "sms_access" in categories
+    assert total > 0
     sms_findings = [f for f in result.findings if "sms_access" in f.id]
     assert len(sms_findings) > 0
     assert sms_findings[0].severity == Severity.high
@@ -47,7 +51,9 @@ def test_reflection_detected(tmp_path: Path) -> None:
         'Class.forName("com.hidden.Payload").getMethod("run").invoke(null);',
     )
     result = ApiUsageAnalyzer().analyze(ctx)
-    assert "reflection" in result.evidence["categories_detected"]
+    categories = result.evidence["categories_detected"]
+    assert isinstance(categories, list)
+    assert "reflection" in categories
 
 
 def test_dynamic_loading_detected(tmp_path: Path) -> None:
@@ -58,7 +64,9 @@ def test_dynamic_loading_detected(tmp_path: Path) -> None:
         'new DexClassLoader(path, null, null, cl).loadClass("Payload");',
     )
     result = ApiUsageAnalyzer().analyze(ctx)
-    assert "dynamic_loading" in result.evidence["categories_detected"]
+    categories = result.evidence["categories_detected"]
+    assert isinstance(categories, list)
+    assert "dynamic_loading" in categories
     dyn_findings = [f for f in result.findings if "dynamic_loading" in f.id]
     assert len(dyn_findings) > 0
     assert dyn_findings[0].severity == Severity.high

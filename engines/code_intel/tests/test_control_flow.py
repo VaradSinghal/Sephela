@@ -28,8 +28,12 @@ def test_reflection_chain_detected(tmp_path: Path) -> None:
     ctx = _make_ctx(tmp_path, "Reflector.java", code)
     result = ControlFlowAnalyzer().analyze(ctx)
 
-    assert "reflection_chain" in result.evidence["patterns_detected"]
-    assert result.evidence["total_matches"] > 0
+    patterns = result.evidence["patterns_detected"]
+    total = result.evidence["total_matches"]
+    assert isinstance(patterns, list)
+    assert isinstance(total, int)
+    assert "reflection_chain" in patterns
+    assert total > 0
     findings = [f for f in result.findings if "reflection_chain" in f.id]
     assert len(findings) > 0
     assert findings[0].severity == Severity.high
@@ -44,7 +48,9 @@ def test_dynamic_dex_loading_detected(tmp_path: Path) -> None:
     ctx = _make_ctx(tmp_path, "DynLoader.java", code)
     result = ControlFlowAnalyzer().analyze(ctx)
 
-    assert "dynamic_dex_loading" in result.evidence["patterns_detected"]
+    patterns = result.evidence["patterns_detected"]
+    assert isinstance(patterns, list)
+    assert "dynamic_dex_loading" in patterns
 
 
 def test_encoded_string_detected(tmp_path: Path) -> None:
@@ -56,7 +62,9 @@ def test_encoded_string_detected(tmp_path: Path) -> None:
     ctx = _make_ctx(tmp_path, "Decoder.java", code)
     result = ControlFlowAnalyzer().analyze(ctx)
 
-    assert "encoded_string_construction" in result.evidence["patterns_detected"]
+    patterns = result.evidence["patterns_detected"]
+    assert isinstance(patterns, list)
+    assert "encoded_string_construction" in patterns
 
 
 def test_clean_code_no_patterns(tmp_path: Path) -> None:
@@ -82,5 +90,8 @@ def test_multiple_patterns_in_one_file(tmp_path: Path) -> None:
     result = ControlFlowAnalyzer().analyze(ctx)
 
     detected = result.evidence["patterns_detected"]
+    total = result.evidence["total_matches"]
+    assert isinstance(detected, list)
+    assert isinstance(total, int)
     assert len(detected) >= 2
-    assert result.evidence["total_matches"] >= 2
+    assert total >= 2

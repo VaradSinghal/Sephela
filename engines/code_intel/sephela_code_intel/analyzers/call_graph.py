@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import re
 from collections import defaultdict
+from typing import Any
 
 from sephela_code_intel.base import Analyzer, AnalysisContext, AnalyzerResult
 from sephela_code_intel.constants import DANGEROUS_API_CATEGORIES
@@ -106,7 +107,7 @@ class CallGraphAnalyzer(Analyzer):
                     dangerous_files[class_name].append(f"{receiver}.{method}")
 
         # Phase 2: Trace paths from entry points to dangerous calls (BFS, depth-limited).
-        suspicious_paths: list[dict[str, object]] = []
+        suspicious_paths: list[dict[str, Any]] = []
         max_depth = 5
         findings: list[Finding] = []
 

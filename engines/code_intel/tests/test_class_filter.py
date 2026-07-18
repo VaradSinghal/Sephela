@@ -60,6 +60,7 @@ def test_analyzer_with_smali_classes() -> None:
     )
     result = ClassFilterAnalyzer().analyze(ctx)
     stats = result.evidence["stats"]
+    assert isinstance(stats, dict)
 
     assert stats["total_classes"] == 4
     assert stats["developer_count"] == 1
@@ -73,4 +74,6 @@ def test_analyzer_empty_classes() -> None:
     """Analyzer handles empty class list gracefully."""
     ctx = AnalysisContext(static_evidence={"smali": {"classes": []}})
     result = ClassFilterAnalyzer().analyze(ctx)
-    assert result.evidence["stats"]["total_classes"] == 0
+    stats = result.evidence["stats"]
+    assert isinstance(stats, dict)
+    assert stats["total_classes"] == 0

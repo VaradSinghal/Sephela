@@ -1,0 +1,394 @@
+/* Sephela Report — Premium Banking-Grade Stylesheet
+ *
+ * Design system:
+ *   - Dark theme with high-contrast data sections
+ *   - Vibrant tier-coded accent colours
+ *   - Professional typography (system fonts, monospace for hashes)
+ *   - Clean table styling for SOC analysts scanning findings
+ */
+
+:root {
+    --bg-primary: #0f1117;
+    --bg-secondary: #1a1d27;
+    --bg-card: #21242f;
+    --bg-hover: #2a2e3d;
+
+    --text-primary: #e4e7ef;
+    --text-secondary: #9ca3b8;
+    --text-muted: #6b7394;
+
+    --accent-blue: #3b82f6;
+    --accent-purple: #8b5cf6;
+
+    --tier-benign: #22c55e;
+    --tier-suspicious: #eab308;
+    --tier-malicious: #f97316;
+    --tier-critical: #ef4444;
+
+    --sev-info: #64748b;
+    --sev-low: #3b82f6;
+    --sev-medium: #eab308;
+    --sev-high: #f97316;
+    --sev-critical: #ef4444;
+
+    --border-subtle: #2a2e3d;
+    --border-accent: #3b82f6;
+
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 16px;
+
+    --shadow-card: 0 4px 20px rgba(0, 0, 0, 0.3);
+    --shadow-elevated: 0 8px 40px rgba(0, 0, 0, 0.5);
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    line-height: 1.7;
+    font-size: 14px;
+    padding: 40px;
+    max-width: 1100px;
+    margin: 0 auto;
+}
+
+.mono, code {
+    font-family: "JetBrains Mono", "Cascadia Code", "Fira Code", monospace;
+    font-size: 0.88em;
+    background: var(--bg-secondary);
+    padding: 2px 6px;
+    border-radius: 4px;
+    color: var(--accent-blue);
+}
+
+/* ---- Header ---- */
+
+.report-header {
+    background: linear-gradient(135deg, var(--bg-secondary), var(--bg-card));
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+    padding: 32px;
+    margin-bottom: 32px;
+    box-shadow: var(--shadow-card);
+}
+
+.header-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+}
+
+.logo {
+    font-size: 24px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+}
+
+.classification {
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    padding: 4px 14px;
+    border-radius: 20px;
+    border: 1px solid var(--border-subtle);
+}
+
+.report-header h1 {
+    font-size: 28px;
+    font-weight: 700;
+    margin-bottom: 20px;
+    background: linear-gradient(135deg, var(--text-primary), var(--accent-blue));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.meta-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+
+.meta-item {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.meta-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--text-muted);
+    font-weight: 600;
+}
+
+.meta-value {
+    color: var(--text-secondary);
+    font-size: 13px;
+}
+
+/* ---- Score Card ---- */
+
+.score-card {
+    text-align: center;
+    padding: 32px;
+    border-radius: var(--radius-lg);
+    margin: 24px 0;
+    background: var(--bg-card);
+    border: 2px solid var(--border-subtle);
+    box-shadow: var(--shadow-card);
+}
+
+.score-card.tier-benign { border-color: var(--tier-benign); }
+.score-card.tier-suspicious { border-color: var(--tier-suspicious); }
+.score-card.tier-malicious { border-color: var(--tier-malicious); }
+.score-card.tier-critical { border-color: var(--tier-critical); }
+
+.score-number {
+    font-size: 64px;
+    font-weight: 800;
+    line-height: 1;
+    margin-bottom: 8px;
+}
+
+.tier-benign .score-number { color: var(--tier-benign); }
+.tier-suspicious .score-number { color: var(--tier-suspicious); }
+.tier-malicious .score-number { color: var(--tier-malicious); }
+.tier-critical .score-number { color: var(--tier-critical); }
+
+.score-label {
+    font-size: 14px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    margin-bottom: 4px;
+}
+
+.score-tier {
+    font-size: 20px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+}
+
+.score-category {
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin-top: 8px;
+}
+
+/* ---- Sections ---- */
+
+section {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    padding: 28px;
+    margin-bottom: 24px;
+    box-shadow: var(--shadow-card);
+}
+
+h2 {
+    font-size: 20px;
+    font-weight: 700;
+    margin-bottom: 20px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border-subtle);
+    color: var(--text-primary);
+}
+
+h3 {
+    font-size: 16px;
+    font-weight: 600;
+    margin: 20px 0 12px;
+    color: var(--text-primary);
+}
+
+p {
+    color: var(--text-secondary);
+    margin-bottom: 12px;
+}
+
+ul, ol {
+    padding-left: 20px;
+    color: var(--text-secondary);
+}
+
+li {
+    margin-bottom: 6px;
+}
+
+/* ---- Badges ---- */
+
+.badge {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.sev-info { background: var(--sev-info); color: #fff; }
+.sev-low { background: var(--sev-low); color: #fff; }
+.sev-medium { background: var(--sev-medium); color: #000; }
+.sev-high { background: var(--sev-high); color: #fff; }
+.sev-critical { background: var(--sev-critical); color: #fff; }
+
+/* ---- Tables ---- */
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 16px 0;
+}
+
+th {
+    text-align: left;
+    padding: 10px 14px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--text-muted);
+    border-bottom: 2px solid var(--border-subtle);
+    font-weight: 600;
+}
+
+td {
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border-subtle);
+    color: var(--text-secondary);
+    font-size: 13px;
+}
+
+tr:hover td {
+    background: var(--bg-hover);
+}
+
+/* ---- Finding Details ---- */
+
+.finding-detail {
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    padding: 20px;
+    margin: 16px 0;
+}
+
+.finding-meta {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+}
+
+.finding-id {
+    font-family: monospace;
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.mitre-tag {
+    font-size: 11px;
+    padding: 2px 8px;
+    background: var(--accent-purple);
+    color: #fff;
+    border-radius: 10px;
+    font-weight: 600;
+}
+
+/* ---- Details / Accordion ---- */
+
+details {
+    margin-top: 12px;
+}
+
+summary {
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 13px;
+    color: var(--accent-blue);
+}
+
+summary:hover {
+    text-decoration: underline;
+}
+
+/* ---- Compliance ---- */
+
+.compliance-block {
+    margin-bottom: 16px;
+    padding: 16px;
+    background: var(--bg-card);
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-subtle);
+}
+
+/* ---- Footer ---- */
+
+.report-footer {
+    text-align: center;
+    padding: 20px;
+    color: var(--text-muted);
+    font-size: 12px;
+    border-top: 1px solid var(--border-subtle);
+    margin-top: 40px;
+}
+
+/* ---- No Data ---- */
+
+.no-data {
+    text-align: center;
+    color: var(--text-muted);
+    font-style: italic;
+    padding: 24px;
+}
+
+/* ---- Print / PDF ---- */
+
+@media print {
+    body {
+        background: #fff;
+        color: #111;
+        padding: 20px;
+    }
+
+    .report-header, section, .finding-detail, .compliance-block {
+        background: #fff;
+        border-color: #ddd;
+        box-shadow: none;
+    }
+
+    .score-card {
+        background: #f8f9fa;
+    }
+
+    .report-header h1 {
+        -webkit-text-fill-color: #111;
+        background: none;
+    }
+
+    h2, h3 {
+        color: #111;
+    }
+
+    p, td, li, .meta-value {
+        color: #333;
+    }
+
+    .meta-label, .score-label, th, .finding-id {
+        color: #666;
+    }
+}

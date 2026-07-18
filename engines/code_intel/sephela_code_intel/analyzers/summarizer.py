@@ -52,12 +52,13 @@ class SummarizerAnalyzer(Analyzer):
         if isinstance(api_ev, dict) and api_ev.get("categories_detected"):
             categories = api_ev["categories_detected"]
             total = api_ev.get("total_findings", 0)
-            sections.append(
-                f"## Suspicious API Usage\n"
-                f"Detected {total} dangerous API call(s) across "
-                f"{len(categories)} categor{'y' if len(categories) == 1 else 'ies'}: "
-                f"{', '.join(str(c) for c in categories)}."
-            )
+            if isinstance(categories, list):
+                sections.append(
+                    f"## Suspicious API Usage\n"
+                    f"Detected {total} dangerous API call(s) across "
+                    f"{len(categories)} categor{'y' if len(categories) == 1 else 'ies'}: "
+                    f"{', '.join(str(c) for c in categories)}."
+                )
             # Add top hits per category.
             hits = api_ev.get("hits_by_category", {})
             if isinstance(hits, dict):
@@ -85,11 +86,12 @@ class SummarizerAnalyzer(Analyzer):
         if isinstance(ctrl_ev, dict) and ctrl_ev.get("patterns_detected"):
             patterns = ctrl_ev["patterns_detected"]
             total_matches = ctrl_ev.get("total_matches", 0)
-            sections.append(
-                f"## Evasion / Control Flow Patterns\n"
-                f"Detected {total_matches} match(es) across "
-                f"{len(patterns)} evasion pattern(s): {', '.join(str(p) for p in patterns)}."
-            )
+            if isinstance(patterns, list):
+                sections.append(
+                    f"## Evasion / Control Flow Patterns\n"
+                    f"Detected {total_matches} match(es) across "
+                    f"{len(patterns)} evasion pattern(s): {', '.join(str(p) for p in patterns)}."
+                )
             details = ctrl_ev.get("details", {})
             if isinstance(details, dict):
                 for pat_name, pat_info in details.items():

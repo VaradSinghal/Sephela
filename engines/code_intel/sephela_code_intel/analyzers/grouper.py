@@ -9,6 +9,7 @@ flat list of files, enabling more targeted reasoning.
 from __future__ import annotations
 
 from collections import defaultdict
+from typing import Any
 
 from sephela_code_intel.base import Analyzer, AnalysisContext, AnalyzerResult
 from sephela_code_intel.constants import GROUP_INDICATORS
@@ -106,7 +107,7 @@ class GrouperAnalyzer(Analyzer):
             source_groups[group].append(path)
 
         # Build per-group summaries.
-        group_summaries: dict[str, dict[str, object]] = {}
+        group_summaries: dict[str, Any] = {}
         for group_name in sorted(set(list(groups.keys()) + list(source_groups.keys()))):
             cls_list = groups.get(group_name, [])
             src_list = source_groups.get(group_name, [])
@@ -122,10 +123,10 @@ class GrouperAnalyzer(Analyzer):
                 "groups": group_summaries,
                 "group_count": len(group_summaries),
                 "total_classified": sum(
-                    s["class_count"] for s in group_summaries.values()  # type: ignore[arg-type]
+                    int(s["class_count"]) for s in group_summaries.values()
                 ),
                 "largest_group": (
-                    max(group_summaries, key=lambda g: group_summaries[g]["class_count"])  # type: ignore[arg-type]
+                    max(group_summaries, key=lambda g: int(group_summaries[g]["class_count"]))
                     if group_summaries
                     else None
                 ),
