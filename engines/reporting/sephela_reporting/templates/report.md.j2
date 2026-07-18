@@ -1,0 +1,192 @@
+# 🛡️ Sephela Malware Analysis Report
+
+| Field | Value |
+|-------|-------|
+| **Report ID** | `{{ report.report_id }}` |
+| **Job ID** | `{{ report.job_id }}` |
+| **Sample SHA256** | `{{ report.sample_sha256 }}` |
+| **Generated** | {{ report.generated_at }} |
+| **Classification** | {{ report.classification }} |
+
+---
+
+## Executive Summary
+
+{{ tier_icon }} **Risk Score: {{ exec_summary.risk_score }}/100** — Tier: **{{ exec_summary.risk_tier | upper }}**
+
+{% if exec_summary.primary_category %}
+**Primary Category:** {{ exec_summary.primary_category }}
+{% endif %}
+
+{{ exec_summary.overview }}
+
+{% if exec_summary.key_findings %}
+### Key Findings
+
+{% for finding in exec_summary.key_findings %}
+- {{ finding }}
+{% endfor %}
+{% endif %}
+
+{% if exec_summary.business_impact %}
+### Business Impact
+
+{{ exec_summary.business_impact }}
+{% endif %}
+
+{% if exec_summary.recommended_actions %}
+### Recommended Actions
+
+{% for action in exec_summary.recommended_actions %}
+{{ loop.index }}. {{ action }}
+{% endfor %}
+{% endif %}
+
+---
+
+## Findings ({{ findings | length }})
+
+{% if findings %}
+| # | Severity | Confidence | Type | Title |
+|---|----------|------------|------|-------|
+{% for f in findings %}
+| {{ loop.index }} | {{ severity_icons.get(f.severity.value, '⚪') }} {{ f.severity.value | upper }} | {{ f.confidence.value }} | `{{ f.type }}` | {{ f.title }} |
+{% endfor %}
+
+{% for f in findings %}
+### {{ loop.index }}. {{ f.title }}
+
+- **ID:** `{{ f.id }}`
+- **Severity:** {{ f.severity.value | upper }} | **Confidence:** {{ f.confidence.value }}
+- **Type:** `{{ f.type }}`
+{% if f.mitre_techniques %}
+- **MITRE ATT&CK:** {{ f.mitre_techniques | join(', ') }}
+{% endif %}
+{% if f.owasp_mobile %}
+- **OWASP Mobile:** {{ f.owasp_mobile | join(', ') }}
+{% endif %}
+
+{{ f.description }}
+
+{% if f.evidence_refs %}
+<details>
+<summary>Evidence ({{ f.evidence_refs | length }})</summary>
+
+{% for ref in f.evidence_refs %}
+- `{{ ref.extractor }}` → `{{ ref.path }}`{% if ref.snippet %}: _{{ ref.snippet }}_{% endif %}
+
+{% endfor %}
+</details>
+{% endif %}
+
+{% endfor %}
+{% else %}
+_No findings._
+{% endif %}
+
+---
+
+## Technical Details
+
+{% if tech.sample_info %}
+### Sample Information
+
+| Property | Value |
+|----------|-------|
+{% for key, value in tech.sample_info.items() %}
+| {{ key }} | `{{ value }}` |
+{% endfor %}
+{% endif %}
+
+{% if tech.static_analysis %}
+### Static Analysis
+
+```json
+{{ tech.static_analysis | tojson(indent=2) }}
+```
+{% endif %}
+
+{% if tech.code_analysis %}
+### Code Analysis
+
+```json
+{{ tech.code_analysis | tojson(indent=2) }}
+```
+{% endif %}
+
+{% if tech.network_analysis %}
+### Network Analysis
+
+```json
+{{ tech.network_analysis | tojson(indent=2) }}
+```
+{% endif %}
+
+{% if tech.threat_intel %}
+### Threat Intelligence
+
+```json
+{{ tech.threat_intel | tojson(indent=2) }}
+```
+{% endif %}
+
+---
+
+## Compliance Mapping
+
+{% if compliance.mitre_attack %}
+### MITRE ATT&CK
+
+{% for category, techniques in compliance.mitre_attack.items() %}
+- **{{ category }}:** {{ techniques | join(', ') }}
+{% endfor %}
+{% endif %}
+
+{% if compliance.owasp_mobile %}
+### OWASP Mobile
+
+{% for category, items in compliance.owasp_mobile.items() %}
+- **{{ category }}:** {{ items | join(', ') }}
+{% endfor %}
+{% endif %}
+
+{% if compliance.nist_csf %}
+### NIST CSF
+
+{% for category, items in compliance.nist_csf.items() %}
+- **{{ category }}:** {{ items | join(', ') }}
+{% endfor %}
+{% endif %}
+
+---
+
+## Evidence Catalog
+
+{% if evidence.ioc_list %}
+### Indicators of Compromise ({{ evidence.ioc_list | length }})
+
+| # | Type | Value |
+|---|------|-------|
+{% for ioc in evidence.ioc_list %}
+| {{ loop.index }} | {{ ioc.get('type', '?') }} | `{{ ioc.get('value', '?') }}` |
+{% endfor %}
+{% endif %}
+
+{% if evidence.extracted_strings %}
+### Extracted Strings ({{ evidence.extracted_strings | length }})
+
+<details>
+<summary>Show strings</summary>
+
+```
+{% for s in evidence.extracted_strings[:100] %}
+{{ s }}
+{% endfor %}
+```
+
+</details>
+{% endif %}
+
+---
+
+> **{{ report.classification }}** — {{ report.generated_by }} v{{ report.version }}

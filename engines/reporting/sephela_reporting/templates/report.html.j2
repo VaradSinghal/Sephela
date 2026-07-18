@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sephela — Report {{ report.report_id }}</title>
+    <style>{{ css }}</style>
+</head>
+<body>
+    <header class="report-header">
+        <div class="header-top">
+            <div class="logo">🛡️ Sephela</div>
+            <div class="classification {{ tier_class }}">{{ report.classification }}</div>
+        </div>
+        <h1>Malware Analysis Report</h1>
+        <div class="meta-grid">
+            <div class="meta-item">
+                <span class="meta-label">Report ID</span>
+                <span class="meta-value">{{ report.report_id }}</span>
+            </div>
+            <div class="meta-item">
+                <span class="meta-label">Job ID</span>
+                <span class="meta-value">{{ report.job_id }}</span>
+            </div>
+            <div class="meta-item">
+                <span class="meta-label">Sample SHA256</span>
+                <span class="meta-value mono">{{ report.sample_sha256 }}</span>
+            </div>
+            <div class="meta-item">
+                <span class="meta-label">Generated</span>
+                <span class="meta-value">{{ report.generated_at }}</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Executive Summary -->
+    <section class="executive-summary">
+        <h2>Executive Summary</h2>
+        <div class="score-card {{ tier_class }}">
+            <div class="score-number">{{ "%.0f" | format(exec_summary.risk_score) }}</div>
+            <div class="score-label">Risk Score</div>
+            <div class="score-tier">{{ exec_summary.risk_tier | upper }}</div>
+            {% if exec_summary.primary_category %}
+            <div class="score-category">{{ exec_summary.primary_category }}</div>
+            {% endif %}
+        </div>
+
+        <div class="summary-text">
+            <p>{{ exec_summary.overview }}</p>
+        </div>
+
+        {% if exec_summary.key_findings %}
+        <div class="key-findings">
+            <h3>Key Findings</h3>
+            <ul>
+                {% for finding in exec_summary.key_findings %}
+                <li>{{ finding }}</li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+
+        {% if exec_summary.business_impact %}
+        <div class="business-impact">
+            <h3>Business Impact</h3>
+            <p>{{ exec_summary.business_impact }}</p>
+        </div>
+        {% endif %}
+
+        {% if exec_summary.recommended_actions %}
+        <div class="recommendations">
+            <h3>Recommended Actions</h3>
+            <ol>
+                {% for action in exec_summary.recommended_actions %}
+                <li>{{ action }}</li>
+                {% endfor %}
+            </ol>
+        </div>
+        {% endif %}
+    </section>
+
+    <!-- Findings -->
+    <section class="findings-section">
+        <h2>Findings ({{ findings | length }})</h2>
+        {% if findings %}
+        <table class="findings-table">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Severity</th>
+                    <th>Confidence</th>
+                    <th>Type</th>
+                    <th>Title</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for f in findings %}
+                <tr>
+                    <td>{{ loop.index }}</td>
+                    <td><span class="badge {{ severity_classes.get(f.severity.value, 'sev-info') }}">{{ f.severity.value | upper }}</span></td>
+                    <td>{{ f.confidence.value }}</td>
+                    <td><code>{{ f.type }}</code></td>
+                    <td>{{ f.title }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        {% for f in findings %}
+        <div class="finding-detail">
+            <h3>{{ loop.index }}. {{ f.title }}</h3>
+            <div class="finding-meta">
+                <span class="badge {{ severity_classes.get(f.severity.value, 'sev-info') }}">{{ f.severity.value | upper }}</span>
+                <span class="finding-id">{{ f.id }}</span>
+                {% if f.mitre_techniques %}
+                <span class="mitre-tag">MITRE: {{ f.mitre_techniques | join(', ') }}</span>
+                {% endif %}
+            </div>
+            <p>{{ f.description }}</p>
+
+            {% if f.evidence_refs %}
+            <details class="evidence-details">
+                <summary>Evidence ({{ f.evidence_refs | length }})</summary>
+                <ul>
+                    {% for ref in f.evidence_refs %}
+                    <li>
+                        <code>{{ ref.extractor }}</code> → <code>{{ ref.path }}</code>
+                        {% if ref.snippet %}<br><em>{{ ref.snippet }}</em>{% endif %}
+                    </li>
+                    {% endfor %}
+                </ul>
+            </details>
+            {% endif %}
+        </div>
+        {% endfor %}
+        {% else %}
+        <p class="no-data">No findings.</p>
+        {% endif %}
+    </section>
+
+    <!-- Compliance Mapping -->
+    <section class="compliance-section">
+        <h2>Compliance Mapping</h2>
+
+        {% if compliance.mitre_attack %}
+        <div class="compliance-block">
+            <h3>MITRE ATT&amp;CK</h3>
+            {% for category, techniques in compliance.mitre_attack.items() %}
+            <p><strong>{{ category }}:</strong> {{ techniques | join(', ') }}</p>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        {% if compliance.owasp_mobile %}
+        <div class="compliance-block">
+            <h3>OWASP Mobile</h3>
+            {% for category, items in compliance.owasp_mobile.items() %}
+            <p><strong>{{ category }}:</strong> {{ items | join(', ') }}</p>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        {% if compliance.nist_csf %}
+        <div class="compliance-block">
+            <h3>NIST CSF</h3>
+            {% for category, items in compliance.nist_csf.items() %}
+            <p><strong>{{ category }}:</strong> {{ items | join(', ') }}</p>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </section>
+
+    <!-- Evidence Catalog -->
+    {% if evidence.ioc_list %}
+    <section class="ioc-section">
+        <h2>Indicators of Compromise ({{ evidence.ioc_list | length }})</h2>
+        <table class="ioc-table">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Type</th>
+                    <th>Value</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for ioc in evidence.ioc_list %}
+                <tr>
+                    <td>{{ loop.index }}</td>
+                    <td>{{ ioc.get('type', '?') }}</td>
+                    <td><code>{{ ioc.get('value', '?') }}</code></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </section>
+    {% endif %}
+
+    <footer class="report-footer">
+        <p>{{ report.classification }} — {{ report.generated_by }} v{{ report.version }}</p>
+    </footer>
+</body>
+</html>
