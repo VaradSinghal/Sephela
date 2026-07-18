@@ -46,8 +46,9 @@ class PipelineRunner:
     ):
         self.registry = registry
         self.checkpointer = checkpointer or get_checkpointer(env, connection_string)
-        self.graph = create_analysis_graph(registry, self.checkpointer)
-        self.compiled_graph = self.graph.compile(checkpointer=self.checkpointer)
+        # create_analysis_graph() already returns a compiled StateGraph
+        # (graph.py calls workflow.compile(...)), so do not compile again.
+        self.compiled_graph = create_analysis_graph(registry, self.checkpointer)
 
     async def run(
         self,
