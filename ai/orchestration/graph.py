@@ -31,31 +31,33 @@ class AnalysisState:
 def create_agent_node(agent: BaseAgent) -> Callable:
     """Create a LangGraph node function for an agent."""
     
-    async def agent_node(state: AnalysisState) -> AnalysisState:
-        state.current_agent = agent.config.name
-        state.status = PipelineStatus.RUNNING
+    async def agent_node(state: AnalysisState) -> dict:
+        updates = {
+            "current_agent": agent.config.name,
+            "status": PipelineStatus.RUNNING,
+        }
         
         try:
             result = await agent.execute(state.evidence, state.context)
-            state.agent_results[agent.config.name] = result
+            new_results = dict(state.agent_results)
+            new_results[agent.config.name] = result
+            updates["agent_results"] = new_results
             
-            if result.status.value == "completed":
-                state.all_findings.extend(result.findings)
-                state.context[f"{agent.config.name}_output"] = result.output.model_dump() if result.output else {}
-                state.context[f"{agent.config.name}_findings"] = [f.model_dump() for f in result.findings]
-            elif result.status.value == "partial":
-                state.all_findings.extend(result.findings)
-                state.context[f"{agent.config.name}_output"] = result.output.model_dump() if result.output else {}
-                state.context[f"{agent.config.name}_findings"] = [f.model_dump() for f in result.findings]
+            if result.status.value in ("completed", "partial"):
+                updates["all_findings"] = state.all_findings + result.findings
+                new_context = dict(state.context)
+                new_context[f"{agent.config.name}_output"] = result.output.model_dump() if result.output else {}
+                new_context[f"{agent.config.name}_findings"] = [f.model_dump() for f in result.findings]
+                updates["context"] = new_context
             else:
-                state.error = f"{agent.config.name}: {result.errors}"
-                state.retry_count += 1
+                updates["error"] = f"{agent.config.name}: {result.errors}"
+                updates["retry_count"] = state.retry_count + 1
                 
         except Exception as e:
-            state.error = f"{agent.config.name}: {str(e)}"
-            state.retry_count += 1
+            updates["error"] = f"{agent.config.name}: {str(e)}"
+            updates["retry_count"] = state.retry_count + 1
         
-        return state
+        return updates
     
     return agent_node
 
@@ -93,19 +95,8 @@ def create_analysis_graph(registry: AgentRegistry, checkpointer: Optional[BaseCh
         if agent and agent.config.enabled:
             workflow.add_node(agent_name, create_agent_node(agent))
     
-    # Add edges
-    for i, agent_name in enumerate(agent_order):
-        agent = registry.get(agent_name)
-        if not agent or not agent.config.enabled:
-            continue
-            
-        if i == 0:
-            workflow.set_entry_point(agent_name)
-        else:
-            prev_agent = agent_order[i - 1]
-            prev = registry.get(prev_agent)
-            if prev and prev.config.enabled:
-                workflow.add_edge(prev_agent, agent_name)
+    # Set entry point
+    workflow.set_entry_point(agent_order[0])
     
     # Add conditional edges for retry logic
     for agent_name in agent_order:
