@@ -1,0 +1,73 @@
+# Sephela Sandbox — Isolated Android Dynamic Analysis Environment
+#
+# Runs a hardware-accelerated Android emulator with Frida instrumentation
+# inside a Docker container. Requires KVM passthrough.
+#
+# SECURITY CONTROLS:
+#   - Network: default-deny egress via iptables (inside container)
+#   - Storage: no host mounts except the output directory
+#   - Privileges: KVM device only, no full --privileged
+#   - Lifecycle: container is ephemeral (--rm)
+#   - Filesystem: emulator runs with -wipe-data (no persistence)
+#
+# USAGE:
+#   docker compose -f docker-compose.sandbox.yml run --rm sandbox \
+#     /opt/sephela/run_analysis.sh /samples/target.apk /output
+#
+# On WSL2: ensure nested virtualization is enabled:
+#   wsl --update
+#   # In .wslconfig: [wsl2] nestedVirtualization=true
+
+services:
+  sandbox:
+    build:
+      context: .
+      dockerfile: Dockerfile.sandbox
+    devices:
+      - /dev/kvm:/dev/kvm  # KVM passthrough for hw-accel emulator
+    # DO NOT use --privileged. KVM device is sufficient.
+    cap_add:
+      - NET_ADMIN  # for iptables network isolation rules
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+      - seccomp:unconfined  # needed for QEMU/KVM
+    # Resource limits to prevent DoS from malware
+    deploy:
+      resources:
+        limits:
+          cpus: "4.0"
+          memory: 8G
+        reservations:
+          cpus: "2.0"
+          memory: 4G
+    # Tmpfs for emulator data (no disk persistence)
+    tmpfs:
+      - /tmp:size=2G
+      - /root/.android:size=1G
+    volumes:
+      # APK input (read-only)
+      - type: bind
+        source: ${SEPHELA_SAMPLES_DIR:-./__samples}
+        target: /samples
+        read_only: true
+      # Artifact output
+      - type: bind
+        source: ${SEPHELA_OUTPUT_DIR:-./__output}
+        target: /output
+    # Network isolation at Docker level
+    networks:
+      - sandbox_isolated
+    environment:
+      - DISPLAY=:0  # for emulator (headless anyway)
+    # No restart — ephemeral by design
+    restart: "no"
+
+networks:
+  sandbox_isolated:
+    driver: bridge
+    internal: true  # No external connectivity at Docker network level
+    ipam:
+      config:
+        - subnet: 172.28.0.0/24

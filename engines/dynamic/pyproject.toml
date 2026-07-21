@@ -1,0 +1,41 @@
+[project]
+name = "sephela-dynamic-engine"
+version = "0.1.0"
+description = "Sephela Dynamic Analysis Engine — parses sandbox runtime artifacts into Evidence Envelopes"
+requires-python = ">=3.12"
+dependencies = [
+    "pydantic>=2.7",
+]
+
+[project.optional-dependencies]
+pcap = [
+    "dpkt>=1.9",
+]
+dev = [
+    "pytest>=8.2",
+    "ruff>=0.4",
+    "mypy>=1.10",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "UP", "B", "C4", "SIM", "TCH"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+plugins = ["pydantic.mypy"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["sephela_dynamic*"]
