@@ -31,7 +31,9 @@ services:
 
   api:
     build:
-      context: ../../backend
+      # Repo root: the image installs backend/ plus the engines/ distributions.
+      context: ../..
+      dockerfile: backend/Dockerfile
     environment:
       SEPHELA_ENV: local
       SEPHELA_POSTGRES_HOST: postgres
@@ -52,7 +54,8 @@ services:
 
   worker:
     build:
-      context: ../../backend
+      context: ../..
+      dockerfile: backend/Dockerfile
     environment:
       SEPHELA_ENV: local
       SEPHELA_POSTGRES_HOST: postgres
