@@ -1,0 +1,35 @@
+# Build context is the repo root (see backend/Dockerfile), so exclusions must
+# live here — backend/.dockerignore no longer applies to that build.
+# Patterns are matched from the context root: use **/ for nested matches.
+
+# VCS & tooling
+.git/
+.github/
+.claude/
+**/*.md
+!README.md
+
+# Python
+**/__pycache__/
+**/*.py[cod]
+**/.venv/
+**/venv/
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+**/*.egg-info/
+**/.env
+!**/.env.example
+
+# Node / frontend (the backend image never needs these; ~400 MB of context)
+**/node_modules/
+**/.next/
+frontend/
+
+# Local data & artifacts
+**/data/
+infra/sandbox/__samples/
+infra/sandbox/__output/
+
+# Tests are not shipped in the runtime image
+**/tests/
