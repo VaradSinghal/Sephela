@@ -67,6 +67,21 @@ class Settings(BaseSettings):
     max_upload_bytes: int = 300 * 1024 * 1024  # 300 MiB
     pipeline_version: str = "2026.1"
 
+    # ---- Dynamic analysis / sandbox (Phase 10) ----
+    # Off by default: the sandbox executes malware and needs a KVM-capable,
+    # egress-firewalled host (docs/architecture/02-services.md, 09-security.md).
+    dynamic_enabled: bool = False
+    sandbox_runner: Literal["disabled", "compose", "script"] = "disabled"
+    sandbox_dir: str = "../infra/sandbox"
+    sandbox_timeout_secs: int = 180
+    # Extra wall-clock beyond the in-script timeout, for emulator boot + cleanup.
+    sandbox_timeout_grace_secs: int = 300
+    sandbox_api_level: int = 33
+    dynamic_artifacts_root: str = "./data/dynamic"
+    # Keep artifacts after a run for debugging; disable in prod (they came from a
+    # machine that ran malware).
+    dynamic_keep_artifacts: bool = False
+
     @computed_field  # type: ignore[prop-decorator]
     @property
     def is_prod(self) -> bool:

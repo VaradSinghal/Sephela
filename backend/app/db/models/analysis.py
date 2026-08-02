@@ -1,9 +1,10 @@
-"""Analysis-domain models (Phase 4 — upload pipeline foundation).
+"""Analysis-domain models (Phase 4 foundation + Phase 10 evidence persistence).
 
 Introduces the sample / job / stage tables needed to accept uploads and track
-their lifecycle. Evidence, findings, risk scores, and reports arrive with their
-respective phases (see docs/architecture/04-data-model.md). No malware-analysis
-logic lives here — only the persistence backbone the pipeline hangs off.
+their lifecycle, plus the ``evidence`` and ``findings`` tables that engine stages
+write into. Risk scores, enrichments, and reports arrive with their respective
+phases (see docs/architecture/04-data-model.md). No malware-analysis logic lives
+here — only the persistence backbone the pipeline hangs off.
 """
 
 from __future__ import annotations
@@ -11,16 +12,20 @@ from __future__ import annotations
 import enum
 import uuid
 from datetime import datetime
+from typing import Any
 
 from sqlalchemy import (
     BigInteger,
     Enum,
+    Float,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
     UniqueConstraint,
 )
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -114,3 +119,67 @@ class StageRun(UUIDMixin, TimestampMixin, Base):
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     job: Mapped[AnalysisJob] = relationship(back_populates="stages")
+    evidence: Mapped[list[Evidence]] = relationship(
+        back_populates="stage_run", cascade="all, delete-orphan"
+    )
+
+
+class Evidence(UUIDMixin, TimestampMixin, Base):
+    """A raw Evidence Envelope emitted by one StageRun.
+
+    ``payload`` is the engine's envelope verbatim (JSONB, GIN-indexed) so the
+    contract can evolve additively without a migration. Bulky by-products
+    (decompiled source, pcap) stay in object storage, referenced by
+    ``large_artifact_uri``.
+    """
+
+    __tablename__ = "evidence"
+    __table_args__ = (
+        Index("ix_evidence_job_id", "job_id"),
+        Index("ix_evidence_payload", "payload", postgresql_using="gin"),
+    )
+
+    stage_run_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("stage_runs.id", ondelete="CASCADE"), nullable=False
+    )
+    job_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("analysis_jobs.id", ondelete="CASCADE"), nullable=False
+    )
+    engine_name: Mapped[str] = mapped_column(String(64), nullable=False)
+    envelope_version: Mapped[str] = mapped_column(String(16), nullable=False)
+    payload: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    large_artifact_uri: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    stage_run: Mapped[StageRun] = relationship(back_populates="evidence")
+
+
+class Finding(UUIDMixin, TimestampMixin, Base):
+    """A normalized finding, denormalized out of an envelope for querying.
+
+    Envelopes stay authoritative; this table exists so the dashboard and scoring
+    engine can filter/aggregate by type and severity without cracking JSONB.
+    """
+
+    __tablename__ = "findings"
+    __table_args__ = (
+        Index("ix_findings_job_id", "job_id"),
+        Index("ix_findings_type", "type"),
+        UniqueConstraint("job_id", "source_engine", "finding_id", name="uq_finding_job_engine_id"),
+    )
+
+    job_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("analysis_jobs.id", ondelete="CASCADE"), nullable=False
+    )
+    evidence_id: Mapped[uuid.UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("evidence.id", ondelete="CASCADE"), nullable=True
+    )
+    source_engine: Mapped[str] = mapped_column(String(64), nullable=False)
+    # The engine-assigned id, stable across re-runs — makes stage retries idempotent.
+    finding_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    type: Mapped[str] = mapped_column(String(64), nullable=False)
+    severity: Mapped[str] = mapped_column(String(16), nullable=False)
+    confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
+    detail: Mapped[str | None] = mapped_column(Text, nullable=True)
+    provenance: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    mitre: Mapped[list[str]] = mapped_column(ARRAY(Text), default=list, nullable=False)
+    owasp_mobile: Mapped[list[str]] = mapped_column(ARRAY(Text), default=list, nullable=False)
