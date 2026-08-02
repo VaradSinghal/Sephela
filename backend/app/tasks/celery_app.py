@@ -16,7 +16,7 @@ celery_app = Celery(
     "sephela",
     broker=settings.redis_url,
     backend=settings.redis_url,
-    include=["app.tasks.health", "app.tasks.pipeline"],
+    include=["app.tasks.health", "app.tasks.pipeline", "app.tasks.dynamic"],
 )
 
 # Workload-class queues (workers subscribe to subsets of these per pool).
