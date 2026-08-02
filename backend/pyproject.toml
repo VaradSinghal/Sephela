@@ -28,6 +28,13 @@ dev = [
     "mypy>=1.10",
     "testcontainers>=4.5",
 ]
+# Analysis engines are separate distributions under engines/. Workers that run a
+# given stage need its engine installed; the API process does not. Install from
+# the repo root, e.g. `make install-engines` or:
+#   pip install -e engines/dynamic
+engines = [
+    "sephela-dynamic-engine",
+]
 
 [tool.ruff]
 line-length = 100
