@@ -1,6 +1,6 @@
-# Local full-stack for Sephela backend foundation (Phase 2).
-# Brings up Postgres, Redis, the API, and a Celery worker.
-# Object storage (MinIO) + vector DB (Qdrant) are added in their phases.
+# Local full-stack for Sephela.
+# Brings up Postgres, Redis, Qdrant, the API, and a Celery worker.
+# Object storage (MinIO) is added in its phase.
 
 services:
   postgres:
@@ -28,6 +28,22 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+
+  # Vector DB for the RAG knowledge service (Phase 12). Optional: the AI layer
+  # defaults to its in-memory store, which is adequate for a curated corpus of a
+  # few thousand chunks. Set RAG_VECTOR_BACKEND=qdrant to use this instead.
+  qdrant:
+    image: qdrant/qdrant:v1.12.1
+    ports:
+      - "6333:6333"
+    volumes:
+      - qdrantdata:/qdrant/storage
+    healthcheck:
+      # Qdrant's image has no curl/wget; its own CLI can probe the local service.
+      test: ["CMD", "/qdrant/qdrant", "--version"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
 
   api:
     build:
@@ -61,6 +77,7 @@ services:
       SEPHELA_POSTGRES_HOST: postgres
       SEPHELA_REDIS_HOST: redis
       SEPHELA_LOG_JSON: "false"
+      QDRANT_URL: http://qdrant:6333
     env_file:
       - ../../backend/.env.example
     depends_on:
@@ -75,3 +92,4 @@ services:
 
 volumes:
   pgdata:
+  qdrantdata:

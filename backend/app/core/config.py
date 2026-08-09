@@ -82,6 +82,30 @@ class Settings(BaseSettings):
     # machine that ran malware).
     dynamic_keep_artifacts: bool = False
 
+    # ---- Threat intelligence (Phase 11) ----
+    # On by default, unlike dynamic analysis: two of the five feeds (URLhaus,
+    # MalwareBazaar) are keyless, so the stage produces real evidence with zero
+    # configuration. Setting no API keys degrades coverage, not correctness.
+    threat_intel_enabled: bool = True
+    # Per-provider API keys. An absent key omits that provider entirely rather
+    # than failing the stage (app.services.threat_intel.build_providers).
+    virustotal_api_key: str | None = None
+    otx_api_key: str | None = None
+    abuseipdb_api_key: str | None = None
+    # abuse.ch services are keyless historically; newer deployments issue keys.
+    urlhaus_api_key: str | None = None
+    bazaar_api_key: str | None = None
+    # Ceiling on *live* provider calls per job. Cache hits are free and do not
+    # count. Sized so one pathological sample cannot drain a day's free quota.
+    threat_intel_max_lookups: int = 200
+    threat_intel_concurrency: int = 8
+    threat_intel_timeout_secs: float = 20.0
+    # Consecutive failures before a provider is dropped for the rest of the run.
+    threat_intel_breaker_threshold: int = 4
+    # Multiplier on the engine's per-IoC-type cache TTLs. Lower it to re-check
+    # verdicts more often (costs quota); raise it to stretch a small quota.
+    threat_intel_cache_ttl_factor: float = 1.0
+
     @computed_field  # type: ignore[prop-decorator]
     @property
     def is_prod(self) -> bool:

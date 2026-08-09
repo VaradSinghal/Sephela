@@ -2,6 +2,7 @@
 
 from app.db.models.analysis import (
     AnalysisJob,
+    Enrichment,
     Evidence,
     Finding,
     JobStatus,
@@ -13,6 +14,7 @@ from app.db.models.identity import Organization, Role, User
 
 __all__ = [
     "AnalysisJob",
+    "Enrichment",
     "Evidence",
     "Finding",
     "JobStatus",

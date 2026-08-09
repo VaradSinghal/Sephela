@@ -8,8 +8,18 @@ enrichment → multi-agent GenAI reasoning → explainable risk score → SOC-re
 reports.
 
 ## Status
-**Phase 1 — Architecture & System Design** ✅ (this deliverable). No application
-code yet, by design.
+**Phases 1–12 implemented.** Architecture, backend, frontend, upload pipeline,
+static/code-intel/dynamic engines, GenAI reasoning, risk scoring, reporting,
+threat-intel enrichment, and the RAG knowledge service are in place. Phases 13
+(multi-agent) and 14 (production hardening) remain.
+
+| Component | Location |
+|---|---|
+| API / orchestration | [backend/](backend/) |
+| Analysis engines | [engines/static/](engines/static/), [engines/code_intel/](engines/code_intel/), [engines/dynamic/](engines/dynamic/), [engines/threat_intel/](engines/threat_intel/) |
+| GenAI, scoring, RAG | [ai/](ai/), [ai/scoring/](ai/scoring/), [ai/rag/](ai/rag/) |
+| Reporting | [engines/reporting/](engines/reporting/) |
+| Dashboard | [frontend/](frontend/) |
 
 ## Architecture docs
 Start at [docs/architecture/00-overview.md](docs/architecture/00-overview.md).
@@ -31,8 +41,22 @@ Start at [docs/architecture/00-overview.md](docs/architecture/00-overview.md).
 | 12 | [Repository structure](docs/architecture/12-repo-structure.md) |
 
 ## Roadmap
-Phase 1 Architecture → 2 Backend → 3 Frontend → 4 Upload → 5 Static → 6 Code
-Intel → 7 GenAI → 8 Risk Scoring → 9 Reporting → 10 Dynamic → 11 Threat Intel →
-12 RAG → 13 Multi-Agent → 14 Production Hardening.
+Phase 1 Architecture ✅ → 2 Backend ✅ → 3 Frontend ✅ → 4 Upload ✅ → 5 Static ✅
+→ 6 Code Intel ✅ → 7 GenAI ✅ → 8 Risk Scoring ✅ → 9 Reporting ✅ → 10 Dynamic ✅
+→ 11 Threat Intel ✅ → 12 RAG ✅ → 13 Multi-Agent → 14 Production Hardening.
 
 Every later phase has a reserved home in the architecture (see doc 10).
+
+## Running it
+```bash
+make up               # postgres, redis, qdrant, api, worker
+make migrate          # apply DB migrations
+make install-engines  # install the analysis engines into the backend venv
+make test             # backend tests
+make test-engines     # each engine's own suite
+make test-ai          # GenAI, scoring, and RAG suites
+```
+
+Threat intel works with no API keys (URLhaus and MalwareBazaar are keyless) and the
+RAG service needs no vector database or embedding key by default — see
+[.env.example](.env.example) for what each key adds.

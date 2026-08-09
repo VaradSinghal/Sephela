@@ -1,10 +1,11 @@
-"""Analysis-domain models (Phase 4 foundation + Phase 10 evidence persistence).
+"""Analysis-domain models (Phase 4 foundation → Phase 11 threat-intel enrichment).
 
 Introduces the sample / job / stage tables needed to accept uploads and track
-their lifecycle, plus the ``evidence`` and ``findings`` tables that engine stages
-write into. Risk scores, enrichments, and reports arrive with their respective
-phases (see docs/architecture/04-data-model.md). No malware-analysis logic lives
-here — only the persistence backbone the pipeline hangs off.
+their lifecycle, the ``evidence`` and ``findings`` tables that engine stages write
+into, and the ``enrichments`` table backing the threat-intel cache. Risk scores
+and reports arrive with their respective phases (see
+docs/architecture/04-data-model.md). No malware-analysis logic lives here — only
+the persistence backbone the pipeline hangs off.
 """
 
 from __future__ import annotations
@@ -24,6 +25,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    func,
 )
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
@@ -183,3 +185,49 @@ class Finding(UUIDMixin, TimestampMixin, Base):
     provenance: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
     mitre: Mapped[list[str]] = mapped_column(ARRAY(Text), default=list, nullable=False)
     owasp_mobile: Mapped[list[str]] = mapped_column(ARRAY(Text), default=list, nullable=False)
+
+
+class Enrichment(UUIDMixin, TimestampMixin, Base):
+    """One provider's verdict on one indicator — and the threat-intel cache.
+
+    This table serves two purposes at once, which is why ``job_id`` is nullable
+    and there is no unique constraint on ``(job_id, ioc_type, ioc_value,
+    provider)``:
+
+    1. **Per-job record** of what was looked up, so a report can show which feeds
+       were consulted for which indicators.
+    2. **Cross-job cache**, keyed on ``(ioc_type, ioc_value, provider)`` with
+       ``expires_at`` as the TTL. External feeds are metered and the same CDN
+       domain or C2 host recurs across every sample in a campaign, so reusing a
+       verdict is the difference between an affordable engine and an unusable one
+       (docs/architecture/02-services.md: "Caches aggressively").
+
+    Cache reads therefore ignore ``job_id`` and take the freshest non-expired row
+    for the indicator/provider pair, whichever job originally fetched it. Rows
+    are kept after expiry rather than deleted — a stale verdict is still audit
+    evidence of what the feed said at analysis time, which matters when a
+    completed job is immutable.
+    """
+
+    __tablename__ = "enrichments"
+    __table_args__ = (
+        # The cache lookup path: indicator + provider + freshness.
+        Index("ix_enrich_ioc", "ioc_type", "ioc_value"),
+        Index("ix_enrich_cache", "ioc_type", "ioc_value", "provider", "expires_at"),
+        Index("ix_enrich_job_id", "job_id"),
+    )
+
+    # Nullable: a cached row outlives the job that fetched it, and job deletion
+    # must not evict the cache for every other tenant.
+    job_id: Mapped[uuid.UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("analysis_jobs.id", ondelete="SET NULL"), nullable=True
+    )
+    ioc_type: Mapped[str] = mapped_column(String(16), nullable=False)
+    ioc_value: Mapped[str] = mapped_column(Text, nullable=False)
+    provider: Mapped[str] = mapped_column(String(32), nullable=False)
+    verdict: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    raw: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    fetched_at: Mapped[datetime] = mapped_column(
+        server_default=func.now(), nullable=False
+    )
+    expires_at: Mapped[datetime | None] = mapped_column(nullable=True)

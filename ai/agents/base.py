@@ -70,14 +70,33 @@ class AgentConfig(BaseModel):
     system_prompt: str = ""
     output_schema: type[BaseModel] | None = None
     enabled: bool = True
+    # Phase 12: append retrieved reference knowledge to this agent's prompt.
+    # Per-agent because not every agent benefits — a purely structural agent
+    # spends its budget better on evidence than on background material.
+    use_knowledge: bool = True
 
 
 class BaseAgent(abc.ABC, Generic[T]):
-    """Abstract base class for all analysis agents."""
-    
-    def __init__(self, config: AgentConfig, llm_client: Any = None):
+    """Abstract base class for all analysis agents.
+
+    Phase 12 adds an optional ``knowledge`` service. Retrieved reference material
+    is appended to the prompt *after* ``build_prompt`` rather than being passed
+    into it, for two reasons:
+
+    - every agent gains RAG without touching its prompt-building code, so there is
+      one place where the reference block's framing and delimiters are decided;
+    - the block therefore always lands *after* the evidence, which is the ordering
+      that keeps the model's attention on the sample it is analysing rather than on
+      the background reading (see ``ai/rag/context.py``).
+
+    A missing or disabled service is a no-op, so the prompt path is identical
+    whether RAG is configured or not.
+    """
+
+    def __init__(self, config: AgentConfig, llm_client: Any = None, knowledge: Any = None):
         self.config = config
         self.llm_client = llm_client
+        self.knowledge = knowledge
         self._validate_config()
     
     def _validate_config(self) -> None:
@@ -107,11 +126,20 @@ class BaseAgent(abc.ABC, Generic[T]):
         """Execute the agent with retries and validation."""
         start_time = time.time()
         errors = []
-        
+
+        # Retrieved once, outside the retry loop: the corpus does not change
+        # between attempts, and re-embedding the same query per retry would pay
+        # for identical results.
+        knowledge_block, knowledge_trace = await self._retrieve_knowledge(evidence, context)
+        if knowledge_block:
+            context = {**context, "reference_knowledge": knowledge_block}
+
         for attempt in range(self.config.max_retries + 1):
             try:
                 prompt = self.build_prompt(evidence, context)
-                
+                if knowledge_block:
+                    prompt = f"{prompt}\n\n{knowledge_block}"
+
                 # Call LLM
                 raw_output = await self._call_llm(prompt)
                 
@@ -131,6 +159,10 @@ class BaseAgent(abc.ABC, Generic[T]):
                     execution_time_ms=execution_time,
                     tokens_used=self._estimate_tokens(prompt, raw_output),
                     model_name=self.config.model,
+                    # Carried so a finding that leaned on background knowledge can
+                    # be audited: which documents were in the prompt, and whether
+                    # retrieval was degraded at the time.
+                    metadata={"rag": knowledge_trace} if knowledge_trace else {},
                 )
                 
             except ValidationError as e:
@@ -165,6 +197,30 @@ class BaseAgent(abc.ABC, Generic[T]):
             execution_time_ms=execution_time,
         )
     
+    async def _retrieve_knowledge(
+        self, evidence: dict[str, Any], context: dict[str, Any]
+    ) -> tuple[str, dict[str, Any] | None]:
+        """Fetch the reference-knowledge block for this agent's prompt.
+
+        Never raises. Background knowledge is an enhancement, so a broken or
+        unreachable knowledge service must degrade the analysis rather than fail
+        it — the same partial-success principle the engine stages follow.
+        """
+        if self.knowledge is None or not self.config.use_knowledge:
+            return "", None
+
+        try:
+            block = await self.knowledge.context_for(
+                evidence,
+                findings=context.get("findings") or context.get("prior_findings"),
+                agent=self.config.name,
+            )
+        except Exception as exc:  # noqa: BLE001
+            return "", {"degraded": True, "error": f"{type(exc).__name__}: {exc}"}
+
+        trace = getattr(self.knowledge, "last_summary", {}).get(self.config.name)
+        return block or "", trace
+
     async def _call_llm(self, prompt: str) -> str:
         """Call the LLM client. Override for custom clients."""
         if self.llm_client is None:
