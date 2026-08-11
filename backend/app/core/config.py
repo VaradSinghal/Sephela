@@ -106,6 +106,23 @@ class Settings(BaseSettings):
     # verdicts more often (costs quota); raise it to stretch a small quota.
     threat_intel_cache_ttl_factor: float = 1.0
 
+    # ---- Feature flags (Phase-gated capabilities) ----
+    # Toggle each capability per environment. All default to False so a fresh
+    # deployment starts safe; enable progressively as each phase lands.
+    static_enabled: bool = True
+    code_intel_enabled: bool = True
+    ai_enabled: bool = False
+    scoring_enabled: bool = False
+    reporting_enabled: bool = False
+    rag_enabled: bool = False
+    multi_agent_enabled: bool = False
+
+    # ---- Observability (OpenTelemetry + Prometheus) ----
+    otel_enabled: bool = False
+    otel_service_name: str = "sephela-api"
+    otel_exporter_endpoint: str | None = None  # e.g. http://localhost:4317
+    metrics_enabled: bool = False
+
     @computed_field  # type: ignore[prop-decorator]
     @property
     def is_prod(self) -> bool:

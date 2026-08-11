@@ -31,9 +31,9 @@ class MalwareBazaarProvider(Provider):
 
     @property
     def configured(self) -> bool:
-        # Historically keyless; newer deployments require an Auth-Key. Either
-        # way the provider is usable, so it is never skipped for lack of a key.
-        return True
+        # MalwareBazaar now strictly requires an Auth-Key, so we only enable
+        # it if a key is provided to avoid 401 Unauthorized errors.
+        return bool(self.api_key)
 
     async def lookup(self, ioc: Ioc, client: httpx.AsyncClient) -> ProviderResult:
         headers = {"Accept": "application/json"}

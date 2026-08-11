@@ -26,6 +26,8 @@ RUN pip install --upgrade pip && pip install .
 # pure-Python (pydantic only), so this stays a cheap layer.
 COPY engines/dynamic /opt/engines/dynamic
 RUN pip install /opt/engines/dynamic
+COPY engines/threat_intel /opt/engines/threat_intel
+RUN pip install /opt/engines/threat_intel
 
 COPY backend/ .
 

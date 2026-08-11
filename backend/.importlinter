@@ -1,0 +1,40 @@
+[importlinter]
+root_packages =
+    app
+    sephela_static
+    sephela_dynamic
+    sephela_threat_intel
+    sephela_code_intel
+    sephela_reporting
+
+[importlinter:contract:engines-independence]
+name = Engines must not import backend or worker code
+type = forbidden
+source_modules =
+    sephela_static
+    sephela_dynamic
+    sephela_threat_intel
+    sephela_code_intel
+    sephela_reporting
+forbidden_modules =
+    app
+    celery
+
+[importlinter:contract:routers-no-db]
+name = API routers must not access the database directly
+type = forbidden
+source_modules =
+    app.api
+forbidden_modules =
+    app.db.session
+    sqlalchemy
+
+[importlinter:contract:services-no-direct-db]
+name = Services must not use raw session — go through repositories
+type = forbidden
+source_modules =
+    app.services
+forbidden_modules =
+    app.db.session
+ignore_imports =
+    app.services.upload -> app.storage.base

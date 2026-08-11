@@ -1,0 +1,32 @@
+# Enforce Conventional Commits on PR titles.
+# The squash-merge commit message comes from the PR title, so validating it
+# here guarantees a clean changelog and semantic versioning.
+
+name: Commitlint
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+jobs:
+  commitlint:
+    name: Validate PR Title
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install commitlint
+        run: |
+          npm install -g @commitlint/cli @commitlint/config-conventional
+
+      - name: Validate PR title
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          echo "$PR_TITLE" | commitlint --config <(echo "module.exports = { extends: ['@commitlint/config-conventional'] }")

@@ -22,7 +22,20 @@ def configure_logging() -> None:
         structlog.processors.add_log_level,
         structlog.processors.TimeStamper(fmt="iso"),
         structlog.processors.StackInfoRenderer(),
+        structlog.processors.format_exc_info,
     ]
+
+    # In debug mode, add callsite info (file, line, function) to every log.
+    if settings.debug:
+        shared_processors.append(
+            structlog.processors.CallsiteParameterAdder(
+                parameters=[
+                    structlog.processors.CallsiteParameter.FILENAME,
+                    structlog.processors.CallsiteParameter.LINENO,
+                    structlog.processors.CallsiteParameter.FUNC_NAME,
+                ],
+            )
+        )
 
     if settings.log_json:
         renderer: structlog.types.Processor = structlog.processors.JSONRenderer()

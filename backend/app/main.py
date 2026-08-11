@@ -12,8 +12,10 @@ from app.api.v1.router import api_router
 from app.core.config import settings
 from app.core.exceptions import register_exception_handlers
 from app.core.logging import configure_logging, get_logger
+from app.core.metrics import setup_metrics
 from app.core.middleware import TraceMiddleware
 from app.core.redis import redis_client
+from app.core.telemetry import instrument_app
 from app.db.session import engine
 
 logger = get_logger(__name__)
@@ -51,6 +53,12 @@ def create_app() -> FastAPI:
 
     register_exception_handlers(app)
     app.include_router(api_router, prefix=settings.api_v1_prefix)
+
+    # Observability: OpenTelemetry tracing + Prometheus metrics.
+    # Both are no-ops when their config flags are False.
+    instrument_app(app)
+    setup_metrics(app)
+
     return app
 
 

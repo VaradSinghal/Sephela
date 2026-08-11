@@ -18,15 +18,29 @@ dependencies = [
     "passlib[bcrypt]>=1.7",
     "python-multipart>=0.0.9",
     "httpx>=0.27",
+    "prometheus-client>=0.20",
 ]
 
 [project.optional-dependencies]
+otel = [
+    "opentelemetry-api>=1.24",
+    "opentelemetry-sdk>=1.24",
+    "opentelemetry-instrumentation-fastapi>=0.45b0",
+    "opentelemetry-instrumentation-httpx>=0.45b0",
+    "opentelemetry-instrumentation-celery>=0.45b0",
+    "opentelemetry-exporter-otlp>=1.24",
+]
 dev = [
     "pytest>=8.2",
     "pytest-asyncio>=0.23",
+    "pytest-cov>=5.0",
     "ruff>=0.4",
     "mypy>=1.10",
     "testcontainers>=4.5",
+    "import-linter>=2.0",
+    "bandit>=1.7",
+    "pip-audit>=2.7",
+    "schemathesis>=3.29",
 ]
 # Analysis engines are separate distributions under engines/. Workers that run a
 # given stage need its engine installed; the API process does not. Install from
@@ -53,6 +67,24 @@ ignore_missing_imports = true
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+
+[tool.coverage.run]
+source = ["app"]
+omit = ["app/tasks/celery_app.py", "*/migrations/*"]
+
+[tool.coverage.report]
+fail_under = 80
+show_missing = true
+skip_covered = true
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "if __name__ == .__main__.",
+]
+
+[tool.bandit]
+exclude_dirs = ["tests"]
+skips = ["B101"]  # assert is fine in non-production code
 
 [build-system]
 requires = ["setuptools>=69"]

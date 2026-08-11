@@ -63,6 +63,74 @@ class ForbiddenError(AppError):
     error_type = "https://sephela.dev/errors/forbidden"
 
 
+# ---------------------------------------------------------------------------
+# Transient vs Permanent — used by retry logic in tasks/pipeline
+# ---------------------------------------------------------------------------
+
+
+class TransientError(AppError):
+    """Retriable error — the operation may succeed on retry.
+
+    Use for: network timeouts, temporary unavailability, rate limits,
+    database connection issues, etc.
+    """
+
+    status_code = 503
+    title = "Service Temporarily Unavailable"
+    error_type = "https://sephela.dev/errors/transient"
+    is_retryable: bool = True
+
+
+class PermanentError(AppError):
+    """Non-retriable error — retrying will not change the outcome.
+
+    Use for: invalid configuration, malformed input, missing required
+    resources, logic errors, etc.
+    """
+
+    status_code = 500
+    title = "Permanent Error"
+    error_type = "https://sephela.dev/errors/permanent"
+    is_retryable: bool = False
+
+
+class EngineError(TransientError):
+    """An analysis engine failed during execution."""
+
+    title = "Engine Error"
+    error_type = "https://sephela.dev/errors/engine"
+
+
+class ExternalServiceError(TransientError):
+    """An external service (threat-intel feed, sandbox API) is unavailable."""
+
+    title = "External Service Error"
+    error_type = "https://sephela.dev/errors/external-service"
+
+
+class RateLimitError(TransientError):
+    """An external API rate limit was hit."""
+
+    status_code = 429
+    title = "Rate Limited"
+    error_type = "https://sephela.dev/errors/rate-limit"
+
+
+class ExternalTimeoutError(TransientError):
+    """An external call timed out."""
+
+    status_code = 504
+    title = "Gateway Timeout"
+    error_type = "https://sephela.dev/errors/timeout"
+
+
+class ConfigurationError(PermanentError):
+    """Invalid or missing configuration — cannot proceed."""
+
+    title = "Configuration Error"
+    error_type = "https://sephela.dev/errors/configuration"
+
+
 def _problem(
     *, status: int, title: str, detail: str, error_type: str, request: Request, **extra: Any
 ) -> JSONResponse:

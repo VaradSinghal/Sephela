@@ -19,7 +19,7 @@ migrate:       ## Apply DB migrations inside the api container
 	$(COMPOSE) run --rm api alembic upgrade head
 
 revision:      ## Autogenerate a migration: make revision m="add users"
-	cd backend && alembic revision --autogenerate -m "$(m)"
+	$(COMPOSE) run --rm api alembic revision --autogenerate -m "$(m)"
 
 install-engines: ## Install analysis engines into the backend venv (editable)
 	cd backend && pip install -e ../engines/dynamic -e ../engines/threat_intel
@@ -43,11 +43,45 @@ rag-ingest:    ## Ingest the knowledge corpus into the configured vector store
 sandbox-build: ## Build the isolated dynamic-analysis sandbox image (needs KVM)
 	$(SANDBOX_COMPOSE) build
 
-lint:          ## Lint
+lint:          ## Lint (backend)
 	cd backend && ruff check .
 
-fmt:           ## Format
+fmt:           ## Format (backend)
 	cd backend && ruff format .
 
-type:          ## Type-check
+type:          ## Type-check (backend)
 	cd backend && mypy app
+
+test-cov:      ## Run backend tests with coverage floor (80%)
+	cd backend && pytest --cov=app --cov-report=term-missing --cov-fail-under=80
+
+security-scan: ## Run bandit (static security) + pip-audit (dependency CVEs)
+	cd backend && bandit -r app/ -c pyproject.toml -ll
+	cd backend && pip-audit
+
+audit:         ## Alias for security-scan
+	$(MAKE) security-scan
+
+import-lint:   ## Enforce import boundaries (engines ↛ backend, repos own DB)
+	cd backend && lint-imports
+
+contract-test: ## Run schemathesis contract tests against the OpenAPI spec
+	cd backend && pytest tests/test_contracts.py -v
+
+lint-fe:       ## Lint + type-check frontend
+	cd frontend && npm run lint && npm run typecheck
+
+fmt-fe:        ## Format frontend with Prettier
+	cd frontend && npm run format
+
+fmt-fe-check:  ## Check frontend formatting (CI gate)
+	cd frontend && npm run format:check
+
+ci-gates:      ## Run ALL CI gates locally (lint, type, test, security, import, format)
+	$(MAKE) lint
+	$(MAKE) type
+	$(MAKE) test-cov
+	$(MAKE) security-scan
+	$(MAKE) import-lint
+	$(MAKE) lint-fe
+	$(MAKE) fmt-fe-check
