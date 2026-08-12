@@ -113,6 +113,7 @@ class WorkflowConfig:
     max_retries: int = 3
     graph_debug: bool = False
     agent_overrides: dict[str, Any] = field(default_factory=dict)
+    knowledge: Any = None
 
 
 # ---------------------------------------------------------------------------
@@ -188,14 +189,14 @@ def build_workflow(cfg: WorkflowConfig) -> Any:  # returns CompiledStateGraph
     # ------------------------------------------------------------------
     llm = cfg.llm_client
 
-    manifest_agent = ManifestAgent(llm_client=llm)
-    permission_agent = PermissionAgent(llm_client=llm)
-    code_agent = CodeAgent(llm_client=llm)
-    api_agent = APIAgent(llm_client=llm)
-    network_agent = NetworkAgent(llm_client=llm)
-    threat_intel_agent = ThreatIntelAgent(llm_client=llm)
-    risk_agent = RiskAgent(llm_client=llm)
-    report_agent = ReportAgent(llm_client=llm)
+    manifest_agent = ManifestAgent(llm_client=llm, knowledge=cfg.knowledge)
+    permission_agent = PermissionAgent(llm_client=llm, knowledge=cfg.knowledge)
+    code_agent = CodeAgent(llm_client=llm, knowledge=cfg.knowledge)
+    api_agent = APIAgent(llm_client=llm, knowledge=cfg.knowledge)
+    network_agent = NetworkAgent(llm_client=llm, knowledge=cfg.knowledge)
+    threat_intel_agent = ThreatIntelAgent(llm_client=llm, knowledge=cfg.knowledge)
+    risk_agent = RiskAgent(llm_client=llm, knowledge=cfg.knowledge)
+    report_agent = ReportAgent(llm_client=llm, knowledge=cfg.knowledge)
 
     # Apply per-agent config overrides if provided
     for agent in (

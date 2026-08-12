@@ -44,6 +44,7 @@ from app.db.session import AsyncSessionLocal
 from app.tasks.celery_app import celery_app
 from app.tasks.dynamic import analyze_dynamic
 from app.tasks.threat_intel import analyze_threat_intel
+from app.tasks.ai import analyze_ai
 
 logger = get_logger(__name__)
 
@@ -153,6 +154,10 @@ def analyze(self, job_id: str) -> str:  # type: ignore[no-untyped-def]
         stages.append(analyze_dynamic.si(job_id))
     if settings.threat_intel_enabled:
         stages.append(analyze_threat_intel.si(job_id))
+    
+    # AI Orchestrator always runs after Threat Intel
+    stages.append(analyze_ai.si(job_id))
+    
     stages.append(finalize.si(job_id))
 
     chain(*stages).apply_async()
@@ -161,6 +166,7 @@ def analyze(self, job_id: str) -> str:  # type: ignore[no-untyped-def]
         job_id=job_id,
         dynamic=settings.dynamic_enabled,
         threat_intel=settings.threat_intel_enabled,
+        ai=True,
     )
     return JobStatus.running.value
 

@@ -183,6 +183,7 @@ class SephelaAnalysisPipeline:
         report_timeout_s: float = 240.0,
         max_retries: int = 2,
         checkpointer: Any = None,
+        knowledge: Any = None,
     ) -> None:
         self._gateway = gateway
         self._model_config = model_config or AgentModelConfig()
@@ -191,6 +192,7 @@ class SephelaAnalysisPipeline:
         self._report_timeout_s = report_timeout_s
         self._max_retries = max_retries
         self._checkpointer = checkpointer
+        self._knowledge = knowledge
 
         # Build and compile the LangGraph workflow
         workflow_cfg = WorkflowConfig(
@@ -199,6 +201,7 @@ class SephelaAnalysisPipeline:
             max_retries=max_retries,
             checkpointer=checkpointer,
             agent_overrides=self._build_agent_overrides(),
+            knowledge=knowledge,
         )
         self._compiled_graph = build_workflow(workflow_cfg)
         _LOG.info("SephelaAnalysisPipeline initialised. Graph compiled successfully.")
@@ -230,6 +233,21 @@ class SephelaAnalysisPipeline:
     ) -> "SephelaAnalysisPipeline":
         """Construct from a pre-built LLMGateway."""
         return cls(gateway=gateway, model_config=model_config, **kwargs)
+
+    @classmethod
+    async def build_with_rag(
+        cls,
+        model_config: Optional[AgentModelConfig] = None,
+        **kwargs: Any,
+    ) -> "SephelaAnalysisPipeline":
+        """
+        Construct a pipeline with the full RAG knowledge service attached.
+        This parses the bundled corpus offline.
+        """
+        from ai.rag.service import build_knowledge_service
+        knowledge = await build_knowledge_service()
+        gateway = LLMGateway.from_env()
+        return cls(gateway=gateway, model_config=model_config, knowledge=knowledge, **kwargs)
 
     # ------------------------------------------------------------------
     # Primary API
