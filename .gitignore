@@ -21,3 +21,10 @@ dist/
 # OS / editor
 .DS_Store
 .idea/
+
+# Python build output. `pip wheel`/`python -m build` writes build/ and dist/ next to
+# the pyproject.toml being built; linting them re-reports every finding in a copy of
+# the source, and committing them ships stale duplicates.
+build/
+dist/
+*.whl

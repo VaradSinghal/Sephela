@@ -1,0 +1,170 @@
+# Worker pools. One Deployment per queue rather than one worker consuming all of
+# them, because the queues have genuinely different resource shapes and failure
+# domains (doc 08): static parsing is CPU-bound, code-intel is memory-bound, AI and
+# threat-intel are IO-bound and rate-limited by someone else's API, and dynamic runs
+# malware. A single pool would have to be provisioned for the worst of all four and
+# would let a sandbox escape sit next to the queue that talks to the LLM provider.
+#
+# The dynamic pool is deliberately absent from this file — see dynamic-worker.yaml.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: sephela-worker
+  namespace: sephela
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: w-static
+  namespace: sephela
+  labels: { app: w-static, role: worker }
+spec:
+  replicas: 2
+  selector: { matchLabels: { app: w-static } }
+  template:
+    metadata:
+      labels: { app: w-static, role: worker }
+    spec:
+      serviceAccountName: sephela-worker
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: worker
+          image: ghcr.io/sephela/backend:latest
+          # --concurrency is per-pool: CPU-bound parsing gets one slot per core,
+          # while the IO-bound pools below oversubscribe deliberately.
+          args:
+            - celery
+            - -A
+            - app.tasks.celery_app.celery_app
+            - worker
+            - --loglevel=INFO
+            - --queues=static,code_intel
+            - --concurrency=4
+            - --max-tasks-per-child=50   # bounds leaks in third-party parsers
+          envFrom:
+            - configMapRef: { name: sephela-config }
+            - secretRef: { name: sephela-secrets }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
+          resources:
+            requests: { cpu: "1", memory: "2Gi" }
+            limits: { cpu: "4", memory: "6Gi" }
+          livenessProbe:
+            # `celery inspect ping` asks the running worker to answer, which catches
+            # a wedged consumer that a process check would call healthy.
+            exec:
+              command:
+                ["celery", "-A", "app.tasks.celery_app.celery_app", "inspect", "ping", "-d",
+                 "celery@$(hostname)"]
+            initialDelaySeconds: 30
+            periodSeconds: 60
+            timeoutSeconds: 15
+      # Long enough for an in-flight decompile to finish rather than be retried.
+      terminationGracePeriodSeconds: 300
+      volumes:
+        - { name: tmp, emptyDir: {} }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: w-ai
+  namespace: sephela
+  labels: { app: w-ai, role: worker }
+spec:
+  replicas: 2
+  selector: { matchLabels: { app: w-ai } }
+  template:
+    metadata:
+      labels: { app: w-ai, role: worker }
+    spec:
+      serviceAccountName: sephela-worker
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: worker
+          image: ghcr.io/sephela/backend:latest
+          args:
+            - celery
+            - -A
+            - app.tasks.celery_app.celery_app
+            - worker
+            - --loglevel=INFO
+            - --queues=ai,scoring,reporting
+            # Low concurrency on purpose: the constraint is the LLM provider's rate
+            # limit, not local CPU. More slots here buy 429s, not throughput.
+            - --concurrency=2
+            - --max-tasks-per-child=100
+          envFrom:
+            - configMapRef: { name: sephela-config }
+            - secretRef: { name: sephela-secrets }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
+          resources:
+            requests: { cpu: "500m", memory: "2Gi" }
+            limits: { cpu: "2", memory: "4Gi" }
+      # A multi-agent run is minutes long and expensive; let it finish rather than
+      # paying for the same eight agent calls twice.
+      terminationGracePeriodSeconds: 900
+      volumes:
+        - { name: tmp, emptyDir: {} }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: w-threat-intel
+  namespace: sephela
+  labels: { app: w-threat-intel, role: worker }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: w-threat-intel } }
+  template:
+    metadata:
+      labels: { app: w-threat-intel, role: worker }
+    spec:
+      serviceAccountName: sephela-worker
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: worker
+          image: ghcr.io/sephela/backend:latest
+          args:
+            - celery
+            - -A
+            - app.tasks.celery_app.celery_app
+            - worker
+            - --loglevel=INFO
+            - --queues=threat_intel,intake,notify
+            - --concurrency=4
+          envFrom:
+            - configMapRef: { name: sephela-config }
+            - secretRef: { name: sephela-secrets }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
+          resources:
+            requests: { cpu: "250m", memory: "512Mi" }
+            limits: { cpu: "1", memory: "1Gi" }
+      terminationGracePeriodSeconds: 120
+      volumes:
+        - { name: tmp, emptyDir: {} }

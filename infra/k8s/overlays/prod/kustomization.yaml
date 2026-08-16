@@ -1,0 +1,20 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: sephela
+resources:
+  - ../../base
+
+# Digests, not tags. A tag is mutable, so `:v1.4.2` today and `:v1.4.2` after a
+# force-push are different images with the same name — which defeats both the
+# rollback story and image signature verification. CI rewrites this value.
+images:
+  - name: ghcr.io/sephela/backend
+    newName: ghcr.io/sephela/backend
+    digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
+
+patches:
+  - target: { kind: ConfigMap, name: sephela-config }
+    patch: |
+      - op: replace
+        path: /data/SEPHELA_ENV
+        value: prod

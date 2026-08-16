@@ -3,8 +3,10 @@ COMPOSE = docker compose -f infra/compose/docker-compose.yml
 SANDBOX_COMPOSE = docker compose -f infra/sandbox/docker-compose.sandbox.yml
 
 help:
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
-	  awk 'BEGIN {FS = ":.*?## "}; {printf "  %-14s %s\n", $$1, $$2}'
+	@# [0-9] included: without it, targets like `k8s-validate` are silently absent
+	@# from this listing — present in the Makefile but undiscoverable.
+	@grep -E '^[a-zA-Z0-9_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
+	  awk 'BEGIN {FS = ":.*?## "}; {printf "  %-16s %s\n", $$1, $$2}'
 
 up:            ## Start local full stack (postgres, redis, api, worker)
 	$(COMPOSE) up --build
@@ -48,6 +50,18 @@ rag-ingest:    ## Ingest the knowledge corpus into the configured vector store
 
 sandbox-build: ## Build the isolated dynamic-analysis sandbox image (needs KVM)
 	$(SANDBOX_COMPOSE) build
+
+k8s-validate:  ## Validate the K8s manifests (structure + security posture; no cluster needed)
+	cd backend && pytest tests/test_k8s_manifests.py -q
+
+k8s-render:    ## Render one overlay to stdout: make k8s-render ENV=prod
+	kustomize build infra/k8s/overlays/$(or $(ENV),dev)
+
+load-read:     ## k6 steady-state read load (staging only — see infra/load/README.md)
+	k6 run infra/load/k6/api-read.js
+
+load-upload:   ## k6 upload soak (staging only; check AI/dynamic flags before running)
+	k6 run infra/load/k6/upload-soak.js
 
 lint:          ## Lint (backend + AI subsystem)
 	cd backend && ruff check .

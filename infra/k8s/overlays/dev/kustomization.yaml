@@ -1,0 +1,35 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: sephela
+resources:
+  - ../../base
+
+images:
+  - name: ghcr.io/sephela/backend
+    newTag: main   # dev tracks the branch; every other environment pins a digest
+
+replicas:
+  - { name: sephela-api, count: 1 }
+  - { name: w-static, count: 1 }
+  - { name: w-ai, count: 1 }
+  - { name: w-threat-intel, count: 1 }
+
+patches:
+  - target: { kind: ConfigMap, name: sephela-config }
+    patch: |
+      - op: replace
+        path: /data/SEPHELA_ENV
+        value: dev
+  # Dev has no KVM node pool, so dynamic analysis cannot run here. Scaling the
+  # sandbox to zero and disabling the flag keeps jobs from queueing forever against
+  # a pool that will never have capacity.
+  - target: { kind: Deployment, name: w-dynamic }
+    patch: |
+      - op: replace
+        path: /spec/replicas
+        value: 0
+  - target: { kind: ConfigMap, name: sephela-sandbox-config }
+    patch: |
+      - op: replace
+        path: /data/SEPHELA_DYNAMIC_ENABLED
+        value: "false"

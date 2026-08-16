@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 from typing import Literal
+from urllib.parse import quote
 
 from pydantic import computed_field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -65,6 +66,11 @@ class Settings(BaseSettings):
     redis_host: str = "localhost"
     redis_port: int = 6379
     redis_db: int = 0
+    # Optional so a local stack needs no credential, but a deployed Redis holds the
+    # job queues — every pending analysis and its sample id — so it must require
+    # auth. Left unset here rather than defaulted to a placeholder, because an
+    # insecure default would be silently accepted in prod.
+    redis_password: str | None = None
 
     # ---- Storage ----
     storage_backend: Literal["local", "s3"] = "local"
@@ -141,27 +147,42 @@ class Settings(BaseSettings):
     def is_prod(self) -> bool:
         return self.env == "prod"
 
+    def _pg_dsn(self, driver: str) -> str:
+        """Build a Postgres DSN with credentials percent-encoded.
+
+        A generated password containing '@', '/', or ':' would otherwise be parsed as
+        part of the host or port, producing a connection attempt against the wrong
+        address rather than an authentication failure — a confusing outage from a
+        correct password.
+        """
+        user = quote(self.postgres_user, safe="")
+        secret = quote(self.postgres_password, safe="")
+        return (
+            f"postgresql+{driver}://{user}:{secret}"
+            f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
+        )
+
     @computed_field  # type: ignore[prop-decorator]
     @property
     def database_url(self) -> str:
         """Async SQLAlchemy DSN (asyncpg driver)."""
-        return (
-            f"postgresql+asyncpg://{self.postgres_user}:{self.postgres_password}"
-            f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
-        )
+        return self._pg_dsn("asyncpg")
 
     @computed_field  # type: ignore[prop-decorator]
     @property
     def sync_database_url(self) -> str:
         """Sync DSN used by Alembic migrations."""
-        return (
-            f"postgresql+psycopg://{self.postgres_user}:{self.postgres_password}"
-            f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
-        )
+        return self._pg_dsn("psycopg")
 
     @computed_field  # type: ignore[prop-decorator]
     @property
     def redis_url(self) -> str:
+        # quote() the password: Redis passwords are generated blobs that routinely
+        # contain '@' or '/', either of which silently truncates the DSN and produces
+        # a confusing "wrong host" failure rather than an auth error.
+        if self.redis_password:
+            secret = quote(self.redis_password, safe="")
+            return f"redis://:{secret}@{self.redis_host}:{self.redis_port}/{self.redis_db}"
         return f"redis://{self.redis_host}:{self.redis_port}/{self.redis_db}"
 
     @computed_field  # type: ignore[prop-decorator]

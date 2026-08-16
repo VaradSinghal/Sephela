@@ -40,7 +40,8 @@
 | Integration | pytest + testcontainers | real Postgres/Redis/MinIO |
 | E2E | playwright | key flows: upload → job → report |
 | Security | bandit, semgrep, trivy, pip-audit/npm-audit | no high/critical to merge |
-| Load | locust/k6 (staging) | meet throughput SLOs (Phase 14) |
+| Load | k6 (staging) | meet the SLOs in [infra/load/README.md](../../infra/load/README.md) — reads p95 < 500 ms at ≥ 150 rps; upload accept p95 < 2 s. Thresholds are encoded in the scenarios, so a breach exits non-zero and gates a release. **Not yet calibrated against a deployed environment.** |
+| Infra | pytest (`test_k8s_manifests.py`) | manifests parse; selectors, references, and autoscaler targets resolve; security posture and sandbox isolation intact. Does **not** replace `kubectl apply --dry-run=server`. |
 - Analysis engines tested with a **curated corpus** (benign + labeled malware) with
   golden Evidence Envelopes; regression on score drift.
 

@@ -29,6 +29,13 @@ RUN pip install /opt/engines/dynamic
 COPY engines/threat_intel /opt/engines/threat_intel
 RUN pip install /opt/engines/threat_intel
 
+# The GenAI subsystem is NOT optional for this image, despite only the AI stage
+# using it: app/tasks/pipeline.py imports app.tasks.ai at module scope, and the API
+# reaches pipeline through app.events.producer. Without `ai` installed, both the API
+# and every worker fail at import with ModuleNotFoundError — not at first AI use.
+COPY ai /opt/ai
+RUN pip install /opt/ai
+
 COPY backend/ .
 
 # Run as non-root (defense in depth — see docs/architecture/09-security.md).

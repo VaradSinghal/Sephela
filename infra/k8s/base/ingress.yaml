@@ -1,0 +1,42 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: sephela-api
+  namespace: sephela
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    # Must be at least SEPHELA_MAX_UPLOAD_BYTES (300 MiB) or the proxy rejects a
+    # legitimate APK before the app ever sees it — and the error comes from nginx,
+    # which makes it look like a network fault rather than a limit.
+    nginx.ingress.kubernetes.io/proxy-body-size: "300m"
+    # A 300 MiB upload over a slow link takes minutes; the default 60s read timeout
+    # would cut it off.
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "600"
+    # Coarse edge limit. The app's own per-principal limiter is the real control
+    # (it can tell users apart); this only blunts a crude flood before it reaches us.
+    nginx.ingress.kubernetes.io/limit-rps: "50"
+    nginx.ingress.kubernetes.io/enable-modsecurity: "true"
+    nginx.ingress.kubernetes.io/enable-owasp-core-rules: "true"
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      more_set_headers "X-Content-Type-Options: nosniff";
+      more_set_headers "X-Frame-Options: DENY";
+      more_set_headers "Referrer-Policy: no-referrer";
+      more_set_headers "Strict-Transport-Security: max-age=31536000; includeSubDomains";
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts: [api.sephela.example]
+      secretName: sephela-api-tls
+  rules:
+    - host: api.sephela.example
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: sephela-api
+                port: { name: http }

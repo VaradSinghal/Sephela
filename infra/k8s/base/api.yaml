@@ -1,0 +1,134 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: sephela-api
+  namespace: sephela
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sephela-api
+  namespace: sephela
+  labels: { app: sephela-api }
+spec:
+  replicas: 3
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels: { app: sephela-api }
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0   # never drop below current capacity during a rollout
+      maxSurge: 1
+  template:
+    metadata:
+      labels: { app: sephela-api }
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: sephela-api
+      automountServiceAccountToken: false  # the API never calls the K8s API
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001          # matches the `sephela` user in backend/Dockerfile
+        fsGroup: 10001
+        seccompProfile: { type: RuntimeDefault }
+      # Spread replicas across nodes so a single node loss cannot take the API down.
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels: { app: sephela-api }
+      containers:
+        - name: api
+          image: ghcr.io/sephela/backend:latest  # overlays pin this to a digest
+          imagePullPolicy: IfNotPresent
+          command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+          ports:
+            - { name: http, containerPort: 8000 }
+          envFrom:
+            - configMapRef: { name: sephela-config }
+            - secretRef: { name: sephela-secrets }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }
+          volumeMounts:
+            # readOnlyRootFilesystem means anything that writes needs an explicit
+            # mount. /tmp is the only one the API needs.
+            - { name: tmp, mountPath: /tmp }
+          resources:
+            requests: { cpu: "250m", memory: "512Mi" }
+            limits: { cpu: "2", memory: "2Gi" }
+          # Liveness only checks the process; readiness checks dependencies. Using
+          # the dependency-checking probe for liveness would restart every pod
+          # during a Postgres blip, converting a degraded API into no API.
+          livenessProbe:
+            httpGet: { path: /api/v1/health/live, port: http }
+            initialDelaySeconds: 10
+            periodSeconds: 15
+            timeoutSeconds: 3
+          readinessProbe:
+            httpGet: { path: /api/v1/health/ready, port: http }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          # Gives in-flight uploads time to finish before the process is killed.
+          lifecycle:
+            preStop:
+              exec: { command: ["sleep", "10"] }
+      terminationGracePeriodSeconds: 45
+      volumes:
+        - { name: tmp, emptyDir: {} }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sephela-api
+  namespace: sephela
+  labels: { app: sephela-api }
+spec:
+  type: ClusterIP
+  selector: { app: sephela-api }
+  ports:
+    - { name: http, port: 80, targetPort: http }
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: sephela-api
+  namespace: sephela
+spec:
+  scaleTargetRef: { apiVersion: apps/v1, kind: Deployment, name: sephela-api }
+  minReplicas: 3
+  maxReplicas: 20
+  metrics:
+    - type: Resource
+      resource: { name: cpu, target: { type: Utilization, averageUtilization: 70 } }
+    - type: Resource
+      resource: { name: memory, target: { type: Utilization, averageUtilization: 80 } }
+  behavior:
+    scaleDown:
+      # Uploads are long-lived; a fast scale-down would cut them off repeatedly.
+      stabilizationWindowSeconds: 300
+      policies: [{ type: Pods, value: 1, periodSeconds: 60 }]
+    scaleUp:
+      stabilizationWindowSeconds: 30
+      policies: [{ type: Percent, value: 100, periodSeconds: 30 }]
+---
+# Keeps a voluntary disruption (node drain, cluster upgrade) from taking the API
+# below quorum. Without this, draining three nodes in sequence can evict all
+# replicas faster than they reschedule.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: sephela-api
+  namespace: sephela
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels: { app: sephela-api }

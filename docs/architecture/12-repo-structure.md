@@ -83,13 +83,17 @@ sephela/
 │   ├── sephela_common/            # logging, tracing, errors, ids, feature flags
 │   └── sephela_evidence/          # evidence envelope models + helpers
 │
-├── infra/                         # infrastructure as code          (Phase 14)
-│   ├── docker/                    # per-service Dockerfiles
-│   ├── compose/                   # docker-compose.*.yml (dev/local full stack)
-│   ├── k8s/                       # helm charts / kustomize overlays
-│   │   ├── base/  overlays/{dev,staging,prod}/
-│   ├── terraform/                 # cloud infra (network, storage, secrets)
-│   └── observability/             # prometheus, grafana dashboards, alerts
+├── infra/                         # infrastructure as code        (Phase 14 ✅)
+│   ├── compose/                   # docker-compose.yml (local full stack)
+│   ├── sandbox/                   # isolated dynamic-analysis image + scripts
+│   ├── k8s/                       # kustomize manifests               ✅
+│   │   ├── base/                  #   prod-shaped, no image digest
+│   │   ├── overlays/{dev,staging,prod}/   # pin the digest, adjust scale
+│   │   ├── deploy.sh              #   verify → render → migrate → apply → wait
+│   │   └── README.md              #   what is verified vs needs a cluster
+│   ├── load/                      # k6 scenarios + the SLOs they gate   ✅
+│   ├── terraform/                 # cloud infra (network, storage)  — not started
+│   └── observability/             # dashboards, alert rules         — not started
 │
 ├── .github/workflows/             # CI/CD pipelines
 ├── Makefile                       # dev ergonomics (lint, test, up, migrate)

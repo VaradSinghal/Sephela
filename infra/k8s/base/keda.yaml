@@ -1,0 +1,119 @@
+# KEDA autoscaling on queue depth (doc 08: "KEDA scales each pool on its queue depth
+# independently").
+#
+# Queue depth rather than CPU, because these workers are not CPU-bound at the moment
+# that matters: a pool with 500 queued jobs and one running task looks idle to an
+# HPA. Each pool scales on its own queue so a backlog of cheap threat-intel lookups
+# does not provision expensive AI workers.
+#
+# Requires KEDA installed in the cluster. Without it these objects are inert.
+apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: redis-auth
+  namespace: sephela
+spec:
+  secretTargetRef:
+    - parameter: password
+      name: sephela-secrets
+      key: SEPHELA_REDIS_PASSWORD
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: w-static
+  namespace: sephela
+spec:
+  scaleTargetRef: { name: w-static }
+  minReplicaCount: 1        # keep one warm: cold-starting on the first upload is
+                            # a visible latency hit on an otherwise idle system
+  maxReplicaCount: 20
+  pollingInterval: 15
+  cooldownPeriod: 300       # a drained queue often refills; don't thrash
+  triggers:
+    - type: redis
+      metadata:
+        address: redis-master.sephela-data.svc.cluster.local:6379
+        listName: static
+        # One replica per 5 queued jobs. Static parsing is seconds-to-minutes, so a
+        # small backlog clears without scaling.
+        listLength: "5"
+      authenticationRef: { name: redis-auth }
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: w-ai
+  namespace: sephela
+spec:
+  scaleTargetRef: { name: w-ai }
+  minReplicaCount: 1
+  # Capped well below the other pools: each replica multiplies spend against the LLM
+  # provider's rate limit, and past a point more workers produce 429s rather than
+  # throughput. The ceiling is a budget decision, not a capacity one.
+  maxReplicaCount: 8
+  pollingInterval: 30
+  cooldownPeriod: 600       # a multi-agent run is minutes; scaling down early kills it
+  triggers:
+    - type: redis
+      metadata:
+        address: redis-master.sephela-data.svc.cluster.local:6379
+        listName: ai
+        listLength: "2"     # AI jobs are slow, so react to a shallow queue
+      authenticationRef: { name: redis-auth }
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: w-threat-intel
+  namespace: sephela
+spec:
+  scaleTargetRef: { name: w-threat-intel }
+  minReplicaCount: 1
+  # Also capped by someone else's rate limit rather than by our capacity — the
+  # engine's own per-provider budget and circuit breaker do the fine-grained work.
+  maxReplicaCount: 6
+  pollingInterval: 30
+  cooldownPeriod: 300
+  triggers:
+    - type: redis
+      metadata:
+        address: redis-master.sephela-data.svc.cluster.local:6379
+        listName: threat_intel
+        listLength: "10"
+      authenticationRef: { name: redis-auth }
+---
+apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: redis-auth
+  namespace: sephela-sandbox
+spec:
+  secretTargetRef:
+    - parameter: password
+      name: sephela-sandbox-secrets
+      key: SEPHELA_REDIS_PASSWORD
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: w-dynamic
+  namespace: sephela-sandbox
+spec:
+  scaleTargetRef: { name: w-dynamic }
+  # minReplicaCount: 0 — unlike the other pools, an idle sandbox is worth
+  # de-provisioning entirely: the nodes are expensive, and there is no warm-start
+  # benefit when every job boots a fresh emulator anyway.
+  minReplicaCount: 0
+  # Hard ceiling set by how many KVM-capable nodes exist in the tainted pool, not by
+  # queue depth. Exceeding it just leaves pods Pending.
+  maxReplicaCount: 4
+  pollingInterval: 30
+  cooldownPeriod: 900       # an emulator run plus teardown is several minutes
+  triggers:
+    - type: redis
+      metadata:
+        address: redis-master.sephela-data.svc.cluster.local:6379
+        listName: dynamic
+        listLength: "1"
+      authenticationRef: { name: redis-auth }

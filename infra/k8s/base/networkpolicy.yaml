@@ -1,0 +1,152 @@
+# Network policy: default-deny in both directions, then explicit allows.
+#
+# Order matters conceptually — the deny-all rules below are what make every other
+# policy in this file meaningful. Without them, "allow the API to reach Postgres"
+# adds nothing, because everything could already reach everything.
+#
+# NOTE: NetworkPolicy is enforced by the CNI. On a cluster whose CNI ignores it
+# (plain flannel, some managed defaults), these objects apply cleanly and do
+# nothing — which is the dangerous failure mode. Verify with a connectivity test,
+# not with `kubectl get netpol`.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: sephela
+spec:
+  podSelector: {}          # every pod in the namespace
+  policyTypes: [Ingress, Egress]
+---
+# DNS has to be allowed explicitly or every hostname lookup fails, which presents as
+# "Postgres is down" rather than "DNS is blocked".
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-dns
+  namespace: sephela
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels: { kubernetes.io/metadata.name: kube-system }
+          podSelector:
+            matchLabels: { k8s-app: kube-dns }
+      ports:
+        - { protocol: UDP, port: 53 }
+        - { protocol: TCP, port: 53 }
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: api-ingress-from-gateway
+  namespace: sephela
+spec:
+  podSelector:
+    matchLabels: { app: sephela-api }
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels: { kubernetes.io/metadata.name: ingress-nginx }
+      ports:
+        - { protocol: TCP, port: 8000 }
+    # Prometheus scrapes /metrics directly.
+    - from:
+        - namespaceSelector:
+            matchLabels: { kubernetes.io/metadata.name: observability }
+      ports:
+        - { protocol: TCP, port: 8000 }
+---
+# API and workers reach the data tier. Note this permits Postgres/Redis only — not
+# arbitrary in-cluster traffic, so a compromised API cannot pivot to the sandbox.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-egress-to-data-tier
+  namespace: sephela
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels: { kubernetes.io/metadata.name: sephela-data }
+      ports:
+        - { protocol: TCP, port: 5432 }   # Postgres
+        - { protocol: TCP, port: 6379 }   # Redis
+        - { protocol: TCP, port: 6333 }   # Qdrant
+---
+# Only the pools that call third parties get internet egress: the AI pool (LLM
+# provider) and the threat-intel pool (feeds). The static/code-intel pool parses
+# bytes and has no reason to reach the network — doc 09 requires "no network" there,
+# and this is where that is actually enforced.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-external-egress-for-io-pools
+  namespace: sephela
+spec:
+  podSelector:
+    matchExpressions:
+      - { key: app, operator: In, values: [w-ai, w-threat-intel, sephela-api] }
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              # Block the cluster and cloud-metadata ranges so "reach the LLM API"
+              # does not also mean "reach the node's credentials endpoint".
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+              - 169.254.169.254/32
+      ports:
+        - { protocol: TCP, port: 443 }
+---
+# ---------------------------------------------------------------------------
+# Sandbox namespace: the sample runs here.
+# ---------------------------------------------------------------------------
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: sandbox-deny-all
+  namespace: sephela-sandbox
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+---
+# The sandbox is allowed exactly three things: DNS, the data tier (to claim its job
+# and write evidence), and object storage (to ship artifacts). It is NOT allowed
+# general internet egress — a sample that phones home from inside the analysis
+# environment both leaks the bank's exposure and taints the capture.
+#
+# Deliberate consequence: dynamic analysis observes attempted C2, not completed C2.
+# Enabling controlled egress for a specific investigation is an operator decision
+# with its own approval, not a default.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: sandbox-allow-minimal-egress
+  namespace: sephela-sandbox
+spec:
+  podSelector:
+    matchLabels: { app: w-dynamic }
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels: { kubernetes.io/metadata.name: kube-system }
+          podSelector:
+            matchLabels: { k8s-app: kube-dns }
+      ports:
+        - { protocol: UDP, port: 53 }
+        - { protocol: TCP, port: 53 }
+    - to:
+        - namespaceSelector:
+            matchLabels: { kubernetes.io/metadata.name: sephela-data }
+      ports:
+        - { protocol: TCP, port: 5432 }
+        - { protocol: TCP, port: 6379 }

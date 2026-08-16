@@ -1,0 +1,93 @@
+# Non-secret configuration. Every key here is safe to read from `kubectl get cm`;
+# anything that would not be is in the ExternalSecret below.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: sephela-config
+  namespace: sephela
+data:
+  SEPHELA_ENV: "prod"
+  SEPHELA_LOG_JSON: "true"
+  SEPHELA_LOG_LEVEL: "INFO"
+
+  SEPHELA_POSTGRES_HOST: "postgres-primary.sephela-data.svc.cluster.local"
+  SEPHELA_POSTGRES_PORT: "5432"
+  SEPHELA_POSTGRES_DB: "sephela"
+  SEPHELA_REDIS_HOST: "redis-master.sephela-data.svc.cluster.local"
+  SEPHELA_REDIS_PORT: "6379"
+
+  SEPHELA_STORAGE_BACKEND: "s3"
+  SEPHELA_S3_BUCKET: "sephela-samples"
+
+  # Feature flags. Dynamic analysis is on in prod because the isolated node pool
+  # exists here (unlike local); the AI stage is on because a credential is supplied.
+  SEPHELA_DYNAMIC_ENABLED: "true"
+  SEPHELA_THREAT_INTEL_ENABLED: "true"
+  SEPHELA_AI_ENABLED: "true"
+
+  # Observability. The collector address is a cluster service, not a secret.
+  SEPHELA_OTEL_ENABLED: "true"
+  SEPHELA_OTEL_EXPORTER_ENDPOINT: "http://otel-collector.observability.svc.cluster.local:4317"
+  SEPHELA_METRICS_ENABLED: "true"
+
+  SEPHELA_RATE_LIMIT_ENABLED: "true"
+---
+# Secrets are pulled from the external secret manager rather than committed. Nothing
+# here is a value — only a mapping from vault paths to environment variables, which
+# is why this file is safe in git.
+#
+# Requires External Secrets Operator and a configured ClusterSecretStore.
+apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: sephela-secrets
+  namespace: sephela
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    name: vault-backend
+    kind: ClusterSecretStore
+  target:
+    name: sephela-secrets
+    creationPolicy: Owner
+  data:
+    # SEPHELA_SECRET_KEY signs every token. The app refuses to boot outside
+    # env=local while this is the placeholder value, so a missing mapping here
+    # fails the deploy loudly instead of serving forgeable tokens.
+    - secretKey: SEPHELA_SECRET_KEY
+      remoteRef:
+        key: sephela/prod/api
+        property: secret_key
+    - secretKey: SEPHELA_POSTGRES_PASSWORD
+      remoteRef:
+        key: sephela/prod/postgres
+        property: password
+    # Also consumed by KEDA's TriggerAuthentication (keda.yaml) so the autoscaler can
+    # read queue depth from an authenticated Redis. A missing key here means KEDA
+    # fails to connect and simply never scales — silently.
+    - secretKey: SEPHELA_REDIS_PASSWORD
+      remoteRef:
+        key: sephela/prod/redis
+        property: password
+    - secretKey: SEPHELA_S3_ACCESS_KEY
+      remoteRef:
+        key: sephela/prod/s3
+        property: access_key
+    - secretKey: SEPHELA_S3_SECRET_KEY
+      remoteRef:
+        key: sephela/prod/s3
+        property: secret_key
+    - secretKey: ANTHROPIC_API_KEY
+      remoteRef:
+        key: sephela/prod/llm
+        property: anthropic_api_key
+    # Threat-intel feeds. An absent key omits that provider rather than failing the
+    # stage, so these are optional by design.
+    - secretKey: SEPHELA_VIRUSTOTAL_API_KEY
+      remoteRef:
+        key: sephela/prod/threat-intel
+        property: virustotal
+    - secretKey: SEPHELA_BAZAAR_API_KEY
+      remoteRef:
+        key: sephela/prod/threat-intel
+        property: bazaar

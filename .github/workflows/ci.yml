@@ -189,6 +189,31 @@ jobs:
           pytest
 
   # ──────────────────────────────────────────────
+  # Infrastructure manifests (structure + security posture; no cluster)
+  # ──────────────────────────────────────────────
+  infra-validate:
+    name: K8s Manifest Validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install dependencies
+        run: |
+          cd backend
+          pip install -e ".[dev]"
+          pip install -e ../ai pyyaml
+      # Catches a Deployment whose selector misses its own pods, a dangling
+      # ConfigMap reference, a KEDA trigger reading a secret key nobody provides,
+      # or a container that lost its security context. Not a substitute for
+      # `kubectl apply --dry-run=server`, which needs a cluster.
+      - name: Validate manifests
+        run: cd backend && pytest tests/test_k8s_manifests.py -v
+      - name: Shell-check the deploy script
+        run: bash -n infra/k8s/deploy.sh
+
+  # ──────────────────────────────────────────────
   # GenAI subsystem: multi-agent orchestration, scoring, RAG
   # ──────────────────────────────────────────────
   ai-tests:

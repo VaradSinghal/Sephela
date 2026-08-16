@@ -8,6 +8,12 @@
 .claude/
 **/*.md
 !README.md
+# Markdown that is runtime *content*, not documentation. The agent prompt bodies and
+# the RAG knowledge corpus are read from disk at runtime, so excluding them ships an
+# image whose agents have no prompts and whose knowledge service ingests nothing —
+# a silent quality failure rather than a startup error.
+!ai/prompts/*.md
+!ai/rag/knowledge/**/*.md
 
 # Python
 **/__pycache__/

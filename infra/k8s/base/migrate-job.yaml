@@ -1,0 +1,54 @@
+# Pre-deploy migration (doc 08: "Migrations run as pre-deploy K8s Jobs (Alembic),
+# backward-compatible").
+#
+# Two properties make this safe to run before the new pods roll out:
+#
+#   * **Backward-compatible migrations only.** During a rolling deploy the old and new
+#     code both run against the migrated schema, so a migration that drops or renames
+#     a column in use breaks the still-running old replicas. Additive first, remove in
+#     a later release — the expand/contract pattern.
+#   * **Idempotent.** `alembic upgrade head` on an up-to-date database is a no-op, so a
+#     retried or re-applied Job is harmless.
+#
+# `ttlSecondsAfterFinished` cleans the Job up without deleting it so fast that the
+# logs are gone before anyone reads them.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: sephela-migrate
+  namespace: sephela
+  annotations:
+    # For Argo CD / Helm: run this to completion before the workloads are applied.
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  backoffLimit: 2
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels: { app: sephela-migrate }
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: migrate
+          image: ghcr.io/sephela/backend:latest
+          command: ["alembic", "upgrade", "head"]
+          envFrom:
+            - configMapRef: { name: sephela-config }
+            - secretRef: { name: sephela-secrets }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
+          resources:
+            requests: { cpu: "100m", memory: "256Mi" }
+            limits: { cpu: "1", memory: "1Gi" }
+      volumes:
+        - { name: tmp, emptyDir: {} }

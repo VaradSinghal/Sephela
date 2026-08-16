@@ -1,0 +1,167 @@
+# Dynamic-analysis pool — the only workload that executes the sample.
+#
+# Everything unusual in this file follows from that: the sample is hostile and may
+# attempt a sandbox escape (docs/architecture/09-security.md). The controls are
+# layered so no single one is load-bearing:
+#
+#   1. Its own namespace, so a policy change in `sephela` cannot widen it.
+#   2. A dedicated, tainted node pool — no other workload is schedulable there, so an
+#      escape lands on a node holding nothing else of value.
+#   3. Egress denied by default (see networkpolicy.yaml in this directory): the
+#      emulator can be reached by the capture sink and nothing else.
+#   4. No service-account token, no cluster API access.
+#   5. One job per pod, then the pod exits — `--max-tasks-per-child=1` means a
+#      compromised emulator process never analyses a second sample.
+#
+# The privileged bits (/dev/kvm) are why this cannot live in the `restricted`
+# namespace. That exemption is the reason for controls 1-5, not an exception to them.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: sephela-dynamic
+  namespace: sephela-sandbox
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: w-dynamic
+  namespace: sephela-sandbox
+  labels: { app: w-dynamic, role: worker, handles-malware: "true" }
+spec:
+  # Not autoscaled on queue depth alone: each replica needs a KVM-capable node, and
+  # the pool size is bounded by that hardware rather than by demand. KEDA scales it
+  # within the pool's ceiling (see keda.yaml).
+  replicas: 1
+  selector: { matchLabels: { app: w-dynamic } }
+  template:
+    metadata:
+      labels: { app: w-dynamic, role: worker, handles-malware: "true" }
+      annotations:
+        # Opt out of any service-mesh sidecar: the mesh would give the sandbox a
+        # network path to the rest of the cluster, which is exactly what control 3
+        # exists to prevent.
+        sidecar.istio.io/inject: "false"
+    spec:
+      serviceAccountName: sephela-dynamic
+      automountServiceAccountToken: false
+      securityContext:
+        # Non-root even here. Access to /dev/kvm comes from the `kvm` group via the
+        # device plugin, not from uid 0 — running the emulator as root would hand a
+        # successful sandbox escape the node instead of an unprivileged account.
+        runAsNonRoot: true
+        runAsUser: 10001
+        fsGroup: 10001
+        # GID of the `kvm` group on the node image. Verify per node pool: a wrong
+        # value presents as "/dev/kvm: permission denied" at emulator boot.
+        supplementalGroups: [108]
+        seccompProfile: { type: RuntimeDefault }
+      # Control 2: only nodes explicitly labelled for malware execution.
+      nodeSelector:
+        sephela.dev/workload: malware-sandbox
+      tolerations:
+        - key: sephela.dev/malware-sandbox
+          operator: Exists
+          effect: NoSchedule
+      # Never co-schedule two sandboxes on one node — a single escape should not
+      # reach a second in-flight sample.
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - topologyKey: kubernetes.io/hostname
+              labelSelector:
+                matchLabels: { app: w-dynamic }
+      containers:
+        - name: worker
+          image: ghcr.io/sephela/backend:latest
+          args:
+            - celery
+            - -A
+            - app.tasks.celery_app.celery_app
+            - worker
+            - --loglevel=INFO
+            - --queues=dynamic
+            # Control 5: one sample per process lifetime.
+            - --concurrency=1
+            - --max-tasks-per-child=1
+          envFrom:
+            - configMapRef: { name: sephela-sandbox-config }
+            - secretRef: { name: sephela-sandbox-secrets }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+            # /dev/kvm needs a device plugin rather than privileged: true. The
+            # difference matters — privileged grants every capability and disables
+            # the seccomp filter, which is the one thing standing between a
+            # container escape and the node.
+          resources:
+            requests:
+              cpu: "2"
+              memory: "6Gi"
+              devices.kubevirt.io/kvm: "1"
+            limits:
+              cpu: "4"
+              memory: "8Gi"
+              devices.kubevirt.io/kvm: "1"
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
+            # Artifacts (pcap, logcat, frida output) are written here and shipped to
+            # object storage by the task. emptyDir so they die with the pod — a disk
+            # that outlives the sandbox is a sample that outlives its analysis.
+            - { name: artifacts, mountPath: /var/sephela/dynamic }
+      terminationGracePeriodSeconds: 600
+      volumes:
+        - { name: tmp, emptyDir: {} }
+        - name: artifacts
+          emptyDir:
+            sizeLimit: 8Gi
+---
+# The sandbox namespace gets its own config: same image, different posture. Notably
+# artifact retention is off — these files came from a machine that ran malware.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: sephela-sandbox-config
+  namespace: sephela-sandbox
+data:
+  SEPHELA_ENV: "prod"
+  SEPHELA_LOG_JSON: "true"
+  SEPHELA_POSTGRES_HOST: "postgres-primary.sephela-data.svc.cluster.local"
+  SEPHELA_REDIS_HOST: "redis-master.sephela-data.svc.cluster.local"
+  SEPHELA_STORAGE_BACKEND: "s3"
+  SEPHELA_S3_BUCKET: "sephela-samples"
+  SEPHELA_DYNAMIC_ENABLED: "true"
+  SEPHELA_SANDBOX_RUNNER: "script"
+  SEPHELA_DYNAMIC_ARTIFACTS_ROOT: "/var/sephela/dynamic"
+  SEPHELA_DYNAMIC_KEEP_ARTIFACTS: "false"
+  # The sandbox has no LLM or threat-intel credentials and no need for them: it
+  # produces evidence, it does not reason about it. Least privilege applies to
+  # secrets as much as to capabilities.
+  SEPHELA_AI_ENABLED: "false"
+  SEPHELA_THREAT_INTEL_ENABLED: "false"
+---
+apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: sephela-sandbox-secrets
+  namespace: sephela-sandbox
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    name: vault-backend
+    kind: ClusterSecretStore
+  target:
+    name: sephela-sandbox-secrets
+    creationPolicy: Owner
+  data:
+    - secretKey: SEPHELA_SECRET_KEY
+      remoteRef: { key: sephela/prod/api, property: secret_key }
+    - secretKey: SEPHELA_POSTGRES_PASSWORD
+      remoteRef: { key: sephela/prod/postgres, property: password }
+    - secretKey: SEPHELA_REDIS_PASSWORD
+      remoteRef: { key: sephela/prod/redis, property: password }
+    - secretKey: SEPHELA_S3_ACCESS_KEY
+      remoteRef: { key: sephela/prod/s3, property: access_key }
+    - secretKey: SEPHELA_S3_SECRET_KEY
+      remoteRef: { key: sephela/prod/s3, property: secret_key }

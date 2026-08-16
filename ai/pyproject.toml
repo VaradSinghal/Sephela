@@ -26,6 +26,8 @@ dev = [
 [tool.ruff]
 line-length = 100
 target-version = "py312"
+# Build output is a copy of the source; linting it double-reports every finding.
+extend-exclude = ["build", "dist"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "UP", "B", "C4", "SIM", "TCH"]
@@ -80,6 +82,11 @@ build-backend = "setuptools.build_meta"
 # are subpackages of ai" from inside ai/. A new subpackage must be added here.
 [tool.setuptools]
 package-dir = {"ai" = "."}
+# Prompt bodies and the RAG corpus are Markdown read from disk at runtime
+# (ai/prompts/prompt_manager.py, ai/rag/ingest.py), not Python. Without this an
+# installed copy has the code and none of its content: prompt lookups fail and the
+# knowledge service silently ingests an empty corpus.
+include-package-data = true
 packages = [
     "ai",
     "ai.agents",
@@ -92,3 +99,8 @@ packages = [
     "ai.scoring",
     "ai.validation",
 ]
+
+[tool.setuptools.package-data]
+# Globs are relative to each package's directory.
+"ai.prompts" = ["*.md"]
+"ai.rag" = ["knowledge/**/*.md"]

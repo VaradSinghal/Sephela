@@ -1,0 +1,19 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# The base is deliberately not deployable on its own: it carries prod-shaped
+# defaults but no image digest. Overlays pin the digest and adjust scale, so a
+# `kubectl apply -k base` cannot accidentally ship `:latest` to a cluster.
+resources:
+  - namespace.yaml
+  - config.yaml
+  - api.yaml
+  - workers.yaml
+  - dynamic-worker.yaml
+  - networkpolicy.yaml
+  - keda.yaml
+  - migrate-job.yaml
+  - ingress.yaml
+
+commonLabels:
+  app.kubernetes.io/part-of: sephela
