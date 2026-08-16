@@ -24,7 +24,7 @@ concern, handled separately.
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import select
@@ -74,7 +74,7 @@ class EnrichmentCacheRepository:
         """
         from sephela_threat_intel.cache import CachedVerdict
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         stmt = (
             select(Enrichment)
             .where(
@@ -104,9 +104,7 @@ class EnrichmentCacheRepository:
         raw: dict[str, Any] = row.raw if isinstance(row.raw, dict) else {}
         return CachedVerdict(verdict=verdict, raw=raw)
 
-    async def put(
-        self, ioc: Ioc, provider: str, entry: CachedVerdict, *, ttl: int
-    ) -> None:
+    async def put(self, ioc: Ioc, provider: str, entry: CachedVerdict, *, ttl: int) -> None:
         """Persist a freshly fetched verdict, tagged to the job that fetched it.
 
         Always inserts rather than upserting: the row is simultaneously the cache
@@ -114,7 +112,7 @@ class EnrichmentCacheRepository:
         ``get`` reads the newest row, so an insert supersedes older entries
         without destroying the history that a completed job's report depends on.
         """
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         effective_ttl = int(max(0, ttl) * self.ttl_factor)
         self.session.add(
             Enrichment(

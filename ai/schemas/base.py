@@ -4,13 +4,14 @@ from __future__ import annotations
 
 from enum import Enum
 from typing import Any, Generic, TypeVar
-from uuid import UUID, uuid4
+from uuid import uuid4
 
 from pydantic import BaseModel, Field, field_validator
 
 
 class Severity(str, Enum):
     """Finding severity levels aligned with CVSS/OWASP."""
+
     info = "info"
     low = "low"
     medium = "medium"
@@ -41,6 +42,7 @@ class Severity(str, Enum):
 
 class Confidence(str, Enum):
     """Confidence levels for findings."""
+
     low = "low"
     medium = "medium"
     high = "high"
@@ -68,6 +70,7 @@ class Confidence(str, Enum):
 
 class EvidenceRef(BaseModel):
     """Reference to evidence in the Evidence Envelope."""
+
     extractor: str = Field(..., description="Name of the extractor that produced this evidence")
     path: str = Field(..., description="JSON path within the extractor's evidence")
     snippet: str | None = Field(None, description="Relevant excerpt for human review")
@@ -76,6 +79,7 @@ class EvidenceRef(BaseModel):
 
 class Finding(BaseModel):
     """Base finding structure with provenance."""
+
     id: str = Field(..., description="Unique finding identifier")
     type: str = Field(..., description="Finding category (e.g., permission, api, network)")
     severity: Severity
@@ -83,8 +87,12 @@ class Finding(BaseModel):
     title: str = Field(..., max_length=200)
     description: str = Field(..., max_length=2000)
     evidence_refs: list[EvidenceRef] = Field(default_factory=list)
-    mitre_techniques: list[str] = Field(default_factory=list, description="MITRE ATT&CK technique IDs")
-    owasp_mobile: list[str] = Field(default_factory=list, description="OWASP Mobile Top 10 categories")
+    mitre_techniques: list[str] = Field(
+        default_factory=list, description="MITRE ATT&CK technique IDs"
+    )
+    owasp_mobile: list[str] = Field(
+        default_factory=list, description="OWASP Mobile Top 10 categories"
+    )
     metadata: dict[str, Any] = Field(default_factory=dict)
 
     @field_validator("id", mode="before")
@@ -98,6 +106,7 @@ T = TypeVar("T")
 
 class AgentResult(BaseModel, Generic[T]):
     """Standardized result from any agent."""
+
     agent_name: str
     success: bool
     findings: list[Finding] = Field(default_factory=list)

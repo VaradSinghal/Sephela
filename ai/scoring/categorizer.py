@@ -16,42 +16,56 @@ from typing import Any
 
 from ai.scoring.constants import MITRE_CATEGORY_HINTS
 
-
 # Known banking trojan family names for threat-intel matching
-_BANKING_FAMILIES: frozenset[str] = frozenset({
-    "anubis", "cerberus", "eventbot", "brata", "teabot", "flubot",
-    "xenomorph", "hook", "medusa", "sharkbot", "hydra", "ermac",
-    "octo", "godfather", "nexus", "vultur", "brokewell", "anatsa",
-    "copybara", "sova", "ginp", "gustuff",
-})
+_BANKING_FAMILIES: frozenset[str] = frozenset(
+    {
+        "anubis",
+        "cerberus",
+        "eventbot",
+        "brata",
+        "teabot",
+        "flubot",
+        "xenomorph",
+        "hook",
+        "medusa",
+        "sharkbot",
+        "hydra",
+        "ermac",
+        "octo",
+        "godfather",
+        "nexus",
+        "vultur",
+        "brokewell",
+        "anatsa",
+        "copybara",
+        "sova",
+        "ginp",
+        "gustuff",
+    }
+)
 
 # Finding types that strongly indicate specific categories
 _TYPE_CATEGORY_HINTS: dict[str, list[tuple[str, int]]] = {
     # (category, weight)
     "exported_component": [("banking_trojan", 1)],
-    "debuggable":         [("riskware", 2)],
-    "backup_allowed":     [("riskware", 1)],
-    "cleartext":          [("riskware", 1)],
-
-    "permission":      [("spyware", 1)],
+    "debuggable": [("riskware", 2)],
+    "backup_allowed": [("riskware", 1)],
+    "cleartext": [("riskware", 1)],
+    "permission": [("spyware", 1)],
     "permission_risk": [("spyware", 1)],
-
-    "control_flow":  [("banking_trojan", 2), ("dropper", 1)],
-    "obfuscation":   [("banking_trojan", 1), ("dropper", 1)],
+    "control_flow": [("banking_trojan", 2), ("dropper", 1)],
+    "obfuscation": [("banking_trojan", 1), ("dropper", 1)],
     "anti_analysis": [("banking_trojan", 2), ("rootkit", 1)],
-    "behavior":      [("banking_trojan", 1)],
-
-    "reflection":    [("dropper", 2), ("banking_trojan", 1)],
-    "native_code":   [("rootkit", 2)],
-
-    "c2":              [("banking_trojan", 3), ("spyware", 2)],
-    "data_exfil":      [("spyware", 3), ("banking_trojan", 1)],
+    "behavior": [("banking_trojan", 1)],
+    "reflection": [("dropper", 2), ("banking_trojan", 1)],
+    "native_code": [("rootkit", 2)],
+    "c2": [("banking_trojan", 3), ("spyware", 2)],
+    "data_exfil": [("spyware", 3), ("banking_trojan", 1)],
     "suspicious_domain": [("banking_trojan", 1), ("spyware", 1)],
-    "pinning_bypass":  [("banking_trojan", 2)],
-
-    "ioc_match":          [("banking_trojan", 5)],
+    "pinning_bypass": [("banking_trojan", 2)],
+    "ioc_match": [("banking_trojan", 5)],
     "family_attribution": [("banking_trojan", 5)],
-    "signature":          [("banking_trojan", 3)],
+    "signature": [("banking_trojan", 3)],
 }
 
 # Dangerous permission combos that hint at specific categories
@@ -59,25 +73,39 @@ _PERMISSION_COMBOS: list[tuple[frozenset[str], str, int]] = [
     # (required_perms, category, weight)
     (
         frozenset({"android.permission.RECEIVE_SMS", "android.permission.SYSTEM_ALERT_WINDOW"}),
-        "banking_trojan", 4,
+        "banking_trojan",
+        4,
     ),
     (
         frozenset({"android.permission.RECEIVE_SMS", "android.permission.READ_SMS"}),
-        "banking_trojan", 3,
+        "banking_trojan",
+        3,
     ),
     (
         frozenset({"android.permission.READ_CONTACTS", "android.permission.RECORD_AUDIO"}),
-        "spyware", 3,
+        "spyware",
+        3,
     ),
     (
-        frozenset({"android.permission.CAMERA", "android.permission.RECORD_AUDIO",
-                    "android.permission.ACCESS_FINE_LOCATION"}),
-        "spyware", 4,
+        frozenset(
+            {
+                "android.permission.CAMERA",
+                "android.permission.RECORD_AUDIO",
+                "android.permission.ACCESS_FINE_LOCATION",
+            }
+        ),
+        "spyware",
+        4,
     ),
     (
-        frozenset({"android.permission.BIND_DEVICE_ADMIN",
-                    "android.permission.BIND_ACCESSIBILITY_SERVICE"}),
-        "banking_trojan", 5,
+        frozenset(
+            {
+                "android.permission.BIND_DEVICE_ADMIN",
+                "android.permission.BIND_ACCESSIBILITY_SERVICE",
+            }
+        ),
+        "banking_trojan",
+        5,
     ),
 ]
 

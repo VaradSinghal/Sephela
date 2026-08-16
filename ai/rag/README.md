@@ -85,7 +85,7 @@ before the new ones are written.
 ```python
 from ai.rag import build_knowledge_service
 
-service = await build_knowledge_service()        # ingests the bundled corpus
+service = await build_knowledge_service()  # ingests the bundled corpus
 block = await service.context_for(evidence, findings=findings, agent="permission_agent")
 ```
 

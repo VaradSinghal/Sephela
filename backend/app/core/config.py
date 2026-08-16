@@ -10,7 +10,7 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field, computed_field
+from pydantic import computed_field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 Environment = Literal["local", "dev", "staging", "prod"]
@@ -35,11 +35,24 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     log_json: bool = True
 
-    # ---- Security (placeholder auth for Phase 2) ----
+    # ---- Security ----
+    # secret_key signs every token. The default is a placeholder that the app
+    # refuses to boot with outside local/test — see _assert_production_ready.
     secret_key: str = "change-me"
     algorithm: str = "HS256"
+    # Access tokens are short so a leaked one expires quickly; refresh tokens carry
+    # the session length and are rotated on every use.
     access_token_expire_minutes: int = 30
+    refresh_token_expire_days: int = 7
     cors_origins: str = "http://localhost:3000"
+
+    # ---- Rate limiting (per-principal, sliding window) ----
+    rate_limit_enabled: bool = True
+    rate_limit_requests: int = 300
+    rate_limit_window_seconds: int = 60
+    # Uploads cost far more than a status poll, so they get their own tighter bucket.
+    rate_limit_upload_requests: int = 20
+    rate_limit_upload_window_seconds: int = 60
 
     # ---- PostgreSQL ----
     postgres_host: str = "localhost"
@@ -155,6 +168,43 @@ class Settings(BaseSettings):
     @property
     def cors_origins_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
+
+
+# Values that are fine locally and unacceptable in a deployed environment. Each is
+# a footgun that fails silently rather than loudly: a default signing key still
+# produces valid-looking tokens, so nothing breaks until someone forges one.
+_INSECURE_DEFAULTS = {
+    "secret_key": "change-me",
+    "postgres_password": "sephela",
+}
+
+
+def assert_production_ready(config: Settings) -> None:
+    """Refuse to run a deployed environment on placeholder secrets.
+
+    Raises:
+        ConfigurationError: if any insecure default survives outside ``local``.
+
+    ``local`` is the only exemption: requiring real secrets to run the test suite or
+    a laptop stack would get this check deleted rather than satisfied. Every other
+    environment in the ``Environment`` literal — including ``dev`` — is a deployed
+    K8s namespace (doc 08) and must supply its own.
+    """
+    if config.env == "local":
+        return
+
+    offenders = [
+        name
+        for name, insecure in _INSECURE_DEFAULTS.items()
+        if getattr(config, name, None) == insecure
+    ]
+    if offenders:
+        from app.core.exceptions import ConfigurationError
+
+        raise ConfigurationError(
+            f"Refusing to start in env='{config.env}' with default "
+            f"{', '.join(sorted(offenders))}. Supply real secrets."
+        )
 
 
 @lru_cache

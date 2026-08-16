@@ -2,24 +2,25 @@
 
 from __future__ import annotations
 
-import pytest
-from unittest.mock import AsyncMock, MagicMock
-from typing import Dict, Any
+from typing import Any
+from unittest.mock import AsyncMock
 
-from ai.schemas.base import Finding, Severity, Confidence, EvidenceRef
-from ai.schemas.manifest import ManifestAnalysis
-from ai.schemas.permission import PermissionAnalysis
-from ai.schemas.code import CodeAnalysis
-from ai.schemas.network import NetworkAnalysis
-from ai.schemas.threat_intel import ThreatIntelAnalysis
-from ai.schemas.risk import RiskAnalysis
-from ai.schemas.report import ReportGenerationResult
+import pytest
+
 from ai.agents.base import AgentConfig, AgentResult, AgentStatus
 from ai.llm.client import LLMConfig, LLMResponse, ModelProvider
+from ai.schemas.base import Confidence, Finding, Severity
+from ai.schemas.code import CodeAnalysis
+from ai.schemas.manifest import ManifestAnalysis
+from ai.schemas.network import NetworkAnalysis
+from ai.schemas.permission import PermissionAnalysis
+from ai.schemas.report import ReportGenerationResult
+from ai.schemas.risk import RiskAnalysis
+from ai.schemas.threat_intel import ThreatIntelAnalysis
 
 
 @pytest.fixture
-def sample_evidence() -> Dict[str, Any]:
+def sample_evidence() -> dict[str, Any]:
     """Sample evidence envelope for testing."""
     return {
         "static_evidence": {
@@ -54,25 +55,30 @@ def sample_evidence() -> Dict[str, Any]:
             },
             "certificate": {
                 "certificates": [
-                    {"subject": "CN=Test", "issuer": "CN=Test", "sha256": "abc123", "self_signed": True}
+                    {
+                        "subject": "CN=Test",
+                        "issuer": "CN=Test",
+                        "sha256": "abc123",
+                        "self_signed": True,
+                    }
                 ]
             },
             "network": {
                 "domains": ["example.com", "malicious.tk", "c2.badguy.net"],
                 "ips": ["1.2.3.4", "192.168.1.1"],
-                "urls": ["https://example.com/api", "http://malicious.tk/c2"]
+                "urls": ["https://example.com/api", "http://malicious.tk/c2"],
             },
             "strings": {
                 "count": 100,
                 "high_entropy_count": 5,
-                "suspicious": ["http://c2.badguy.net", "malicious_payload", "keylogger"]
+                "suspicious": ["http://c2.badguy.net", "malicious_payload", "keylogger"],
             },
             "hashes": {
                 "sha256": "a" * 64,
                 "sha1": "b" * 40,
                 "md5": "c" * 32,
                 "ssdeep": "ssdeep_hash",
-                "tlsh": "tlsh_hash"
+                "tlsh": "tlsh_hash",
             },
         },
         "code_intel": {
@@ -92,10 +98,17 @@ def sample_evidence() -> Dict[str, Any]:
                 }
             },
             "api_usage": {
-                "dangerous_apis": ["Landroid/view/WindowManager;->addView", "Landroid/accessibilityservice/AccessibilityService;->onAccessibilityEvent"],
+                "dangerous_apis": [
+                    "Landroid/view/WindowManager;->addView",
+                    "Landroid/accessibilityservice/AccessibilityService;->onAccessibilityEvent",
+                ],
                 "call_sites": [
                     {"method": "MainActivity.onCreate", "api": "WindowManager.addView", "line": 42},
-                    {"method": "AccessibilityService.onAccessibilityEvent", "api": "AccessibilityService.onAccessibilityEvent", "line": 15}
+                    {
+                        "method": "AccessibilityService.onAccessibilityEvent",
+                        "api": "AccessibilityService.onAccessibilityEvent",
+                        "line": 15,
+                    },
                 ],
                 "reflection_usage": ["Class.forName", "Method.invoke"],
                 "dynamic_loading": ["DexClassLoader"],
@@ -109,7 +122,11 @@ def sample_evidence() -> Dict[str, Any]:
             },
             "control_flow": {
                 "anomalies": [
-                    {"method": "MalwareClass.evilMethod", "type": "obfuscated", "description": "String decryption loop"}
+                    {
+                        "method": "MalwareClass.evilMethod",
+                        "type": "obfuscated",
+                        "description": "String decryption loop",
+                    }
                 ]
             },
             "class_filter": {
@@ -125,14 +142,16 @@ def sample_evidence() -> Dict[str, Any]:
 def mock_llm_client():
     """Mock LLM client for testing."""
     client = AsyncMock()
-    client.complete = AsyncMock(return_value=LLMResponse(
-        content='{"test": "output"}',
-        model="claude-opus-5",
-        provider=ModelProvider.ANTHROPIC,
-        tokens_used=100,
-        latency_ms=500,
-        finish_reason="stop",
-    ))
+    client.complete = AsyncMock(
+        return_value=LLMResponse(
+            content='{"test": "output"}',
+            model="claude-opus-5",
+            provider=ModelProvider.ANTHROPIC,
+            tokens_used=100,
+            latency_ms=500,
+            finish_reason="stop",
+        )
+    )
     client.stream_complete = AsyncMock()
     client.close = AsyncMock()
     return client

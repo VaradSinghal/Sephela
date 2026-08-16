@@ -66,9 +66,7 @@ class StubAgent:
         self.delay_s = delay_s
         self.calls: list[dict[str, Any]] = []
 
-    async def execute(
-        self, evidence: dict[str, Any], context: dict[str, Any]
-    ) -> AgentResult:
+    async def execute(self, evidence: dict[str, Any], context: dict[str, Any]) -> AgentResult:
         self.calls.append({"evidence": evidence, "context": dict(context)})
 
         if self.delay_s:
@@ -137,9 +135,7 @@ def fleet(monkeypatch):
     ) -> StubFleet:
         f = StubFleet(behaviours, delays)
         for agent_name, class_name in _CLASS_BY_AGENT.items():
-            monkeypatch.setattr(
-                f"ai.orchestration.workflow.{class_name}", f.factory(agent_name)
-            )
+            monkeypatch.setattr(f"ai.orchestration.workflow.{class_name}", f.factory(agent_name))
         return f
 
     return _install
@@ -171,8 +167,14 @@ class TestTopology:
         nodes = set(graph.get_graph().nodes)
         for name in (*ANALYSIS_AGENTS, "risk_agent", "report_agent"):
             assert name in nodes
-        for gate in ("orchestrator_start", "check_evidence", "fanout_gate",
-                     "analysis_join", "abort", "finalise"):
+        for gate in (
+            "orchestrator_start",
+            "check_evidence",
+            "fanout_gate",
+            "analysis_join",
+            "abort",
+            "finalise",
+        ):
             assert gate in nodes
 
     def test_the_six_analysis_agents_share_one_predecessor(self, fleet) -> None:

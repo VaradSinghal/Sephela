@@ -3,13 +3,15 @@
 from __future__ import annotations
 
 from typing import Any
+
 from pydantic import BaseModel, Field
 
-from ai.schemas.base import Finding, Severity, Confidence, EvidenceRef
+from ai.schemas.base import Finding
 
 
 class MethodInfo(BaseModel):
     """Decompiled method metadata."""
+
     class_name: str
     method_name: str
     return_type: str
@@ -24,6 +26,7 @@ class MethodInfo(BaseModel):
 
 class ClassInfo(BaseModel):
     """Decompiled class metadata."""
+
     class_name: str
     superclass: str | None = None
     interfaces: list[str] = Field(default_factory=list)
@@ -36,6 +39,7 @@ class ClassInfo(BaseModel):
 
 class CallGraphEdge(BaseModel):
     """Single edge in call graph."""
+
     caller: str
     callee: str
     call_type: str = Field(..., pattern="^(direct|virtual|interface|super|static)$")
@@ -45,6 +49,7 @@ class CallGraphEdge(BaseModel):
 
 class CallGraph(BaseModel):
     """Method call graph."""
+
     nodes: list[str] = Field(default_factory=list)  # method signatures
     edges: list[CallGraphEdge] = Field(default_factory=list)
     entry_points: list[str] = Field(default_factory=list)
@@ -53,14 +58,18 @@ class CallGraph(BaseModel):
 
 class ControlFlowFinding(Finding):
     """Control flow anomaly finding."""
+
     method_signature: str
-    anomaly_type: str = Field(..., pattern="^(unreachable|infinite_loop|exception_swallowing|dead_code|obfuscated)$")
+    anomaly_type: str = Field(
+        ..., pattern="^(unreachable|infinite_loop|exception_swallowing|dead_code|obfuscated)$"
+    )
     snippet: str | None = None
     explanation: str = ""
 
 
 class APIUsageFinding(Finding):
     """Dangerous API usage finding."""
+
     api_class: str
     api_method: str
     api_package: str
@@ -72,11 +81,12 @@ class APIUsageFinding(Finding):
 
 class CodeSummary(BaseModel):
     """Token-optimized code summary for LLM consumption."""
+
     total_classes: int = 0
     total_methods: int = 0
     app_classes: int = 0  # non-framework, non-library
     app_methods: int = 0
-    
+
     # Key structures
     entry_points: list[str] = Field(default_factory=list)  # activities, services, receivers
     network_apis: list[str] = Field(default_factory=list)
@@ -85,12 +95,12 @@ class CodeSummary(BaseModel):
     ipc_apis: list[str] = Field(default_factory=list)
     reflection_usage: list[str] = Field(default_factory=list)
     native_libs: list[str] = Field(default_factory=list)
-    
+
     # Suspicious patterns
     string_obfuscation: bool = False
     class_encryption: bool = False
     anti_analysis: list[str] = Field(default_factory=list)
-    
+
     # Banking-specific
     banking_apis: list[str] = Field(default_factory=list)
     overlay_apis: list[str] = Field(default_factory=list)
@@ -100,17 +110,18 @@ class CodeSummary(BaseModel):
 
 class CodeAnalysis(BaseModel):
     """Complete code analysis output."""
+
     # Structural
     classes: list[ClassInfo] = Field(default_factory=list)
     call_graph: CallGraph | None = None
-    
+
     # Findings
     control_flow_findings: list[ControlFlowFinding] = Field(default_factory=list)
     api_usage_findings: list[APIUsageFinding] = Field(default_factory=list)
-    
+
     # Summary for LLM
     summary: CodeSummary = Field(default_factory=CodeSummary)
-    
+
     # All findings flattened
     findings: list[Finding] = Field(default_factory=list)
 

@@ -60,8 +60,17 @@ class TestSearch:
             store,
             embedder,
             [
-                make_doc(doc_id="sms.md", text="# SMS\n\n" + "SMS one time passcode interception by a high priority broadcast receiver. " * 4),
-                make_doc(doc_id="overlay.md", text="# Overlay\n\n" + "Overlay windows drawn over banking apps to phish credentials. " * 4),
+                make_doc(
+                    doc_id="sms.md",
+                    text="# SMS\n\n"
+                    + "SMS one time passcode interception by a high priority broadcast receiver. "
+                    * 4,
+                ),
+                make_doc(
+                    doc_id="overlay.md",
+                    text="# Overlay\n\n"
+                    + "Overlay windows drawn over banking apps to phish credentials. " * 4,
+                ),
             ],
         )
         vector = await embedder.embed_one("overlay windows phishing banking credentials")
@@ -116,17 +125,13 @@ class TestFilters:
     async def test_family_filter_is_case_insensitive(self, store, embedder) -> None:  # type: ignore[no-untyped-def]
         await load(store, embedder, [make_doc(families=["Cerberus"])])
         vector = await embedder.embed_one("overlay")
-        results = await store.search(
-            vector, top_k=5, filters=SearchFilter(families=["CERBERUS"])
-        )
+        results = await store.search(vector, top_k=5, filters=SearchFilter(families=["CERBERUS"]))
         assert results
 
     async def test_family_filter_excludes_unrelated_documents(self, store, embedder) -> None:  # type: ignore[no-untyped-def]
         await load(store, embedder, [make_doc(families=["cerberus"])])
         vector = await embedder.embed_one("overlay")
-        results = await store.search(
-            vector, top_k=5, filters=SearchFilter(families=["flubot"])
-        )
+        results = await store.search(vector, top_k=5, filters=SearchFilter(families=["flubot"]))
         assert results == []
 
     async def test_mitre_and_tag_filters_apply(self, store, embedder) -> None:  # type: ignore[no-untyped-def]

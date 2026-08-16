@@ -15,16 +15,15 @@ import asyncio
 import json
 import logging
 import time
-from contextlib import asynccontextmanager
-from datetime import datetime, timezone
-from typing import Any, Callable, Optional
+from collections.abc import Callable
+from datetime import UTC, datetime
+from typing import Any
 
 from opentelemetry import context as otel_context
 from opentelemetry import trace
-from opentelemetry.trace import NonRecordingSpan, SpanContext, TraceFlags
 from opentelemetry.trace.propagation.tracecontext import TraceContextTextMapPropagator
 
-from ai.agents.base import AgentConfig, AgentRegistry, AgentResult, AgentStatus, BaseAgent
+from ai.agents.base import AgentResult, AgentStatus, BaseAgent
 from ai.orchestration.graph_state import (
     AgentResultEntry,
     AgentRunStatus,
@@ -42,7 +41,9 @@ _LOG = logging.getLogger("sephela.orchestrator")
 # OpenTelemetry tracer
 # ---------------------------------------------------------------------------
 
-_TRACER = trace.get_tracer("sephela.orchestrator", schema_url="https://opentelemetry.io/schemas/1.24.0")
+_TRACER = trace.get_tracer(
+    "sephela.orchestrator", schema_url="https://opentelemetry.io/schemas/1.24.0"
+)
 _PROPAGATOR = TraceContextTextMapPropagator()
 
 # ---------------------------------------------------------------------------
@@ -50,7 +51,7 @@ _PROPAGATOR = TraceContextTextMapPropagator()
 # ---------------------------------------------------------------------------
 
 # Default timeouts by agent tier
-_ANALYSIS_AGENT_TIMEOUT_S = 180   # manifest / permission / code / api / network / threat_intel
+_ANALYSIS_AGENT_TIMEOUT_S = 180  # manifest / permission / code / api / network / threat_intel
 _RISK_AGENT_TIMEOUT_S = 120
 _REPORT_AGENT_TIMEOUT_S = 120
 
@@ -69,12 +70,12 @@ def _log(
     level: str,
     event: str,
     job_id: str,
-    agent_name: Optional[str] = None,
+    agent_name: str | None = None,
     **extra: Any,
 ) -> None:
     """Emit a single structured JSON log line."""
     record: dict[str, Any] = {
-        "ts": datetime.now(timezone.utc).isoformat(),
+        "ts": datetime.now(UTC).isoformat(),
         "level": level,
         "event": event,
         "job_id": job_id,
@@ -91,7 +92,7 @@ def _log(
 # ---------------------------------------------------------------------------
 
 
-def _restore_otel_context(otel_carrier: Optional[dict[str, str]]) -> Any:
+def _restore_otel_context(otel_carrier: dict[str, str] | None) -> Any:
     """Restore OTel trace context from the carrier stored in GraphState."""
     if not otel_carrier:
         return otel_context.get_current()
@@ -120,7 +121,7 @@ async def _run_with_timeout(
     """Await *coro* with a deadline. Raises asyncio.TimeoutError on breach."""
     try:
         return await asyncio.wait_for(coro, timeout=timeout_s)
-    except asyncio.TimeoutError:
+    except TimeoutError:
         _log("warning", "agent_timeout", job_id, agent_name, timeout_s=timeout_s)
         raise
 
@@ -163,7 +164,7 @@ async def _execute_with_retry(
                 job_id=job_id,
             )
             return result
-        except asyncio.TimeoutError as exc:
+        except TimeoutError as exc:
             last_error = exc
             # Timeouts are not retried — surface immediately.
             raise
@@ -216,7 +217,7 @@ def make_agent_node(
         otel_carrier: dict[str, str] = state.get("otel_context", {})
         retry_counts: dict[str, int] = state.get("retry_counts", {})
 
-        started_at = datetime.now(timezone.utc).isoformat()
+        started_at = datetime.now(UTC).isoformat()
 
         # ------------------------------------------------------------------
         # Restore OTel context and open a span
@@ -255,7 +256,7 @@ def make_agent_node(
                 )
 
                 exec_ms = int((time.perf_counter() - t0) * 1000)
-                completed_at = datetime.now(timezone.utc).isoformat()
+                completed_at = datetime.now(UTC).isoformat()
 
                 if result.status == AgentStatus.completed:
                     status_val = AgentRunStatus.COMPLETED.value
@@ -265,7 +266,7 @@ def make_agent_node(
                     status_val = AgentRunStatus.FAILED.value
 
                 # Serialise output and findings
-                output_dict: Optional[dict[str, Any]] = None
+                output_dict: dict[str, Any] | None = None
                 if result.output is not None:
                     output_dict = (
                         result.output.model_dump()
@@ -320,9 +321,9 @@ def make_agent_node(
                     tokens=result.tokens_used,
                 )
 
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 exec_ms = int((time.perf_counter() - t0) * 1000)
-                completed_at = datetime.now(timezone.utc).isoformat()
+                completed_at = datetime.now(UTC).isoformat()
 
                 result_entry = AgentResultEntry(
                     agent_name=agent_name,
@@ -336,13 +337,13 @@ def make_agent_node(
                 )
 
                 span.set_status(trace.StatusCode.ERROR, "timeout")
-                span.record_exception(asyncio.TimeoutError(f"Timed out after {timeout_s}s"))
+                span.record_exception(TimeoutError(f"Timed out after {timeout_s}s"))
 
                 _log("error", "agent_timeout_fatal", job_id, agent_name, timeout_s=timeout_s)
 
             except Exception as exc:  # noqa: BLE001
                 exec_ms = int((time.perf_counter() - t0) * 1000)
-                completed_at = datetime.now(timezone.utc).isoformat()
+                completed_at = datetime.now(UTC).isoformat()
 
                 result_entry = AgentResultEntry(
                     agent_name=agent_name,
@@ -424,13 +425,13 @@ def make_risk_node(
             attributes={"sephela.job_id": job_id, "sephela.agent": agent_name},
         ) as span:
             span_id = format(span.get_span_context().span_id, "016x")
-            started_at = datetime.now(timezone.utc).isoformat()
+            started_at = datetime.now(UTC).isoformat()
             t0 = time.perf_counter()
 
             _log("info", "agent_start", job_id, agent_name, span_id=span_id)
 
             result_entry: AgentResultEntry
-            risk_result: Optional[dict[str, Any]] = None
+            risk_result: dict[str, Any] | None = None
 
             try:
                 result: AgentResult = await _execute_with_retry(
@@ -443,9 +444,9 @@ def make_risk_node(
                 )
 
                 exec_ms = int((time.perf_counter() - t0) * 1000)
-                completed_at = datetime.now(timezone.utc).isoformat()
+                completed_at = datetime.now(UTC).isoformat()
 
-                output_dict: Optional[dict[str, Any]] = None
+                output_dict: dict[str, Any] | None = None
                 if result.output is not None:
                     output_dict = (
                         result.output.model_dump()
@@ -482,7 +483,7 @@ def make_risk_node(
 
             except Exception as exc:  # noqa: BLE001
                 exec_ms = int((time.perf_counter() - t0) * 1000)
-                completed_at = datetime.now(timezone.utc).isoformat()
+                completed_at = datetime.now(UTC).isoformat()
 
                 result_entry = AgentResultEntry(
                     agent_name=agent_name,
@@ -554,13 +555,13 @@ def make_report_node(
             attributes={"sephela.job_id": job_id, "sephela.agent": agent_name},
         ) as span:
             span_id = format(span.get_span_context().span_id, "016x")
-            started_at = datetime.now(timezone.utc).isoformat()
+            started_at = datetime.now(UTC).isoformat()
             t0 = time.perf_counter()
 
             _log("info", "agent_start", job_id, agent_name, span_id=span_id)
 
             result_entry: AgentResultEntry
-            report_dict: Optional[dict[str, Any]] = None
+            report_dict: dict[str, Any] | None = None
 
             try:
                 result: AgentResult = await _execute_with_retry(
@@ -573,9 +574,9 @@ def make_report_node(
                 )
 
                 exec_ms = int((time.perf_counter() - t0) * 1000)
-                completed_at = datetime.now(timezone.utc).isoformat()
+                completed_at = datetime.now(UTC).isoformat()
 
-                output_dict: Optional[dict[str, Any]] = None
+                output_dict: dict[str, Any] | None = None
                 if result.output is not None:
                     output_dict = (
                         result.output.model_dump()
@@ -612,7 +613,7 @@ def make_report_node(
 
             except Exception as exc:  # noqa: BLE001
                 exec_ms = int((time.perf_counter() - t0) * 1000)
-                completed_at = datetime.now(timezone.utc).isoformat()
+                completed_at = datetime.now(UTC).isoformat()
 
                 result_entry = AgentResultEntry(
                     agent_name=agent_name,
@@ -631,9 +632,7 @@ def make_report_node(
         # complete — reporting it as such would hand the API an empty verdict to
         # serve. Analysis still ran, so the honest terminal state is PARTIAL.
         terminal_status = (
-            PipelineStatus.COMPLETED.value
-            if report_dict
-            else PipelineStatus.PARTIAL.value
+            PipelineStatus.COMPLETED.value if report_dict else PipelineStatus.PARTIAL.value
         )
 
         partial: dict[str, Any] = {
@@ -641,7 +640,7 @@ def make_report_node(
             "report": report_dict,
             "all_findings": [],
             "pipeline_status": terminal_status,
-            "completed_at": datetime.now(timezone.utc).isoformat(),
+            "completed_at": datetime.now(UTC).isoformat(),
         }
         return partial
 
@@ -692,8 +691,7 @@ async def finalise_node(state: GraphState) -> dict[str, Any]:
     error = state.get("error")
     total_findings = len(state.get("all_findings", []))
     agent_statuses = {
-        name: entry.get("status")
-        for name, entry in state.get("agent_results", {}).items()
+        name: entry.get("status") for name, entry in state.get("agent_results", {}).items()
     }
 
     _log(
@@ -707,7 +705,7 @@ async def finalise_node(state: GraphState) -> dict[str, Any]:
         apk_sha256=state.get("apk_sha256"),
     )
 
-    completed_at = state.get("completed_at") or datetime.now(timezone.utc).isoformat()
+    completed_at = state.get("completed_at") or datetime.now(UTC).isoformat()
     return {
         "completed_at": completed_at,
     }

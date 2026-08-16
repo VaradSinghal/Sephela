@@ -6,16 +6,35 @@ import json
 import re
 from typing import Any
 
-from pydantic import BaseModel
-
-from ai.schemas.base import Finding, Severity, Confidence, EvidenceRef
-from ai.schemas.network import NetworkAnalysis, NetworkConnection, DomainIntel, IPIntel, CertificateInfo, NetworkFinding
-from ai.agents.base import BaseAgent, AgentConfig, AgentResult
-
+from ai.agents.base import AgentConfig, BaseAgent
+from ai.schemas.base import Confidence, EvidenceRef, Finding, Severity
+from ai.schemas.network import (
+    CertificateInfo,
+    DomainIntel,
+    NetworkAnalysis,
+    NetworkConnection,
+    NetworkFinding,
+)
 
 SUSPICIOUS_TLDS = {
-    ".tk", ".ml", ".ga", ".cf", ".gq", ".xyz", ".top", ".work", ".date", ".loan",
-    ".download", ".racing", ".win", ".bid", ".trade", ".party", ".science", ".stream",
+    ".tk",
+    ".ml",
+    ".ga",
+    ".cf",
+    ".gq",
+    ".xyz",
+    ".top",
+    ".work",
+    ".date",
+    ".loan",
+    ".download",
+    ".racing",
+    ".win",
+    ".bid",
+    ".trade",
+    ".party",
+    ".science",
+    ".stream",
 }
 
 KNOWN_C2_PATTERNS = [
@@ -30,9 +49,22 @@ KNOWN_C2_PATTERNS = [
 ]
 
 BANKING_TARGET_KEYWORDS = [
-    "bank", "chase", "wellsfargo", "citi", "bankofamerica", "capitalone",
-    "paypal", "venmo", "cashapp", "zelle", "coinbase", "binance",
-    "crypto", "wallet", "ledger", "trezor",
+    "bank",
+    "chase",
+    "wellsfargo",
+    "citi",
+    "bankofamerica",
+    "capitalone",
+    "paypal",
+    "venmo",
+    "cashapp",
+    "zelle",
+    "coinbase",
+    "binance",
+    "crypto",
+    "wallet",
+    "ledger",
+    "trezor",
 ]
 
 
@@ -128,12 +160,12 @@ Analyze and output a complete NetworkAnalysis object with:
     def parse_output(self, raw_output: str) -> NetworkAnalysis:
         try:
             data = json.loads(raw_output)
-        except json.JSONDecodeError:
-            match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', raw_output, re.DOTALL)
+        except json.JSONDecodeError as exc:
+            match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", raw_output, re.DOTALL)
             if match:
                 data = json.loads(match.group(1))
             else:
-                raise ValueError("Could not parse agent output as JSON")
+                raise ValueError("Could not parse agent output as JSON") from exc
 
         return NetworkAnalysis(**data)
 
@@ -141,7 +173,9 @@ Analyze and output a complete NetworkAnalysis object with:
         return output.findings
 
 
-def analyze_network_deterministic(evidence: dict[str, Any], ti_context: dict[str, Any] = None) -> NetworkAnalysis:
+def analyze_network_deterministic(
+    evidence: dict[str, Any], ti_context: dict[str, Any] = None
+) -> NetworkAnalysis:
     """Deterministic network analysis without LLM."""
     network_evidence = evidence.get("static_evidence", {}).get("network", {})
     cert_evidence = evidence.get("static_evidence", {}).get("certificate", {})
@@ -180,57 +214,67 @@ def analyze_network_deterministic(evidence: dict[str, Any], ti_context: dict[str
                 reasons.append(f"Banking target keyword: {kw}")
                 break
 
-        connections.append(NetworkConnection(
-            host=domain,
-            protocol="https",
-            source="string",
-            context="Extracted from strings/network analysis",
-            is_suspicious=is_suspicious,
-            suspicion_reasons=reasons,
-        ))
+        connections.append(
+            NetworkConnection(
+                host=domain,
+                protocol="https",
+                source="string",
+                context="Extracted from strings/network analysis",
+                is_suspicious=is_suspicious,
+                suspicion_reasons=reasons,
+            )
+        )
 
         if ti_context and domain in ti_context.get("domains", {}):
             ti = ti_context["domains"][domain]
-            domain_intel.append(DomainIntel(
-                domain=domain,
-                is_malicious=ti.get("malicious", False),
-                categories=ti.get("categories", []),
-                reputation_score=ti.get("reputation"),
-                first_seen=ti.get("first_seen"),
-                last_seen=ti.get("last_seen"),
-                registrar=ti.get("registrar"),
-                country=ti.get("country"),
-                is_dga=ti.get("is_dga", False),
-                is_newly_registered=ti.get("newly_registered", False),
-                related_malware_families=ti.get("families", []),
-            ))
+            domain_intel.append(
+                DomainIntel(
+                    domain=domain,
+                    is_malicious=ti.get("malicious", False),
+                    categories=ti.get("categories", []),
+                    reputation_score=ti.get("reputation"),
+                    first_seen=ti.get("first_seen"),
+                    last_seen=ti.get("last_seen"),
+                    registrar=ti.get("registrar"),
+                    country=ti.get("country"),
+                    is_dga=ti.get("is_dga", False),
+                    is_newly_registered=ti.get("newly_registered", False),
+                    related_malware_families=ti.get("families", []),
+                )
+            )
             if ti.get("malicious"):
-                findings.append(NetworkFinding(
-                    id=f"domain_malicious:{domain}",
-                    type="network",
-                    severity=Severity.critical,
-                    confidence=Confidence.very_high,
-                    title=f"Malicious domain: {domain}",
-                    description=f"Domain flagged as malicious by threat intelligence: {ti.get('categories', [])}",
-                    evidence_refs=[EvidenceRef(extractor="network", path="domains")],
-                    finding_type="suspicious_domain",
-                    indicator=domain,
-                    indicator_type="domain",
-                    ti_context=domain_intel[-1],
-                    mitre_techniques=["T1071.001"],
-                    owasp_mobile=["M3"],
-                ))
+                findings.append(
+                    NetworkFinding(
+                        id=f"domain_malicious:{domain}",
+                        type="network",
+                        severity=Severity.critical,
+                        confidence=Confidence.very_high,
+                        title=f"Malicious domain: {domain}",
+                        description=f"Domain flagged as malicious by threat intelligence: {ti.get('categories', [])}",
+                        evidence_refs=[EvidenceRef(extractor="network", path="domains")],
+                        finding_type="suspicious_domain",
+                        indicator=domain,
+                        indicator_type="domain",
+                        ti_context=domain_intel[-1],
+                        mitre_techniques=["T1071.001"],
+                        owasp_mobile=["M3"],
+                    )
+                )
 
     # Analyze IPs
     for ip in ips:
-        connections.append(NetworkConnection(
-            host=ip,
-            protocol="tcp",
-            source="string",
-            context="Extracted IP address",
-            is_suspicious=not ip.startswith(("10.", "192.168.", "172.16.", "127.")),
-            suspicion_reasons=["Public IP address"] if not ip.startswith(("10.", "192.168.", "172.16.", "127.")) else [],
-        ))
+        connections.append(
+            NetworkConnection(
+                host=ip,
+                protocol="tcp",
+                source="string",
+                context="Extracted IP address",
+                is_suspicious=not ip.startswith(("10.", "192.168.", "172.16.", "127.")),
+                suspicion_reasons=["Public IP address"]
+                if not ip.startswith(("10.", "192.168.", "172.16.", "127."))
+                else [],
+            )
+        )
 
     # Analyze certificates
     for cert in certs:
@@ -249,21 +293,23 @@ def analyze_network_deterministic(evidence: dict[str, Any], ti_context: dict[str
         certificate_info.append(cert_info)
 
         if cert_info.is_self_signed:
-            findings.append(NetworkFinding(
-                id=f"cert_self_signed:{cert_info.sha256[:16]}",
-                type="network",
-                severity=Severity.high,
-                confidence=Confidence.very_high,
-                title="Self-signed certificate",
-                description="Certificate is self-signed - potential MITM or custom CA",
-                evidence_refs=[EvidenceRef(extractor="certificate", path="certificates")],
-                finding_type="cert_pinning",
-                indicator=cert_info.sha256,
-                indicator_type="certificate",
-                ti_context=cert_info,
-                mitre_techniques=["T1573.002"],
-                owasp_mobile=["M5"],
-            ))
+            findings.append(
+                NetworkFinding(
+                    id=f"cert_self_signed:{cert_info.sha256[:16]}",
+                    type="network",
+                    severity=Severity.high,
+                    confidence=Confidence.very_high,
+                    title="Self-signed certificate",
+                    description="Certificate is self-signed - potential MITM or custom CA",
+                    evidence_refs=[EvidenceRef(extractor="certificate", path="certificates")],
+                    finding_type="cert_pinning",
+                    indicator=cert_info.sha256,
+                    indicator_type="certificate",
+                    ti_context=cert_info,
+                    mitre_techniques=["T1573.002"],
+                    owasp_mobile=["M5"],
+                )
+            )
 
     # Network security config
     net_config = manifest_evidence.get("network_security_config")
@@ -271,20 +317,22 @@ def analyze_network_deterministic(evidence: dict[str, Any], ti_context: dict[str
     pinning = bool(net_config and "pin-set" in str(net_config))
 
     if cleartext:
-        findings.append(NetworkFinding(
-            id="cleartext_permitted",
-            type="network",
-            severity=Severity.medium,
-            confidence=Confidence.very_high,
-            title="Cleartext traffic permitted",
-            description="android:usesCleartextTraffic=true or network security config allows cleartext",
-            evidence_refs=[EvidenceRef(extractor="manifest", path="uses_cleartext_traffic")],
-            finding_type="cleartext",
-            indicator="cleartext",
-            indicator_type="configuration",
-            mitre_techniques=["T1040"],
-            owasp_mobile=["M3", "M5"],
-        ))
+        findings.append(
+            NetworkFinding(
+                id="cleartext_permitted",
+                type="network",
+                severity=Severity.medium,
+                confidence=Confidence.very_high,
+                title="Cleartext traffic permitted",
+                description="android:usesCleartextTraffic=true or network security config allows cleartext",
+                evidence_refs=[EvidenceRef(extractor="manifest", path="uses_cleartext_traffic")],
+                finding_type="cleartext",
+                indicator="cleartext",
+                indicator_type="configuration",
+                mitre_techniques=["T1040"],
+                owasp_mobile=["M3", "M5"],
+            )
+        )
 
     return NetworkAnalysis(
         domains=domains,

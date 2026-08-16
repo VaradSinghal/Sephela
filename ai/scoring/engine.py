@@ -65,8 +65,7 @@ class RiskScoringEngine:
         total = sum(self.weights.values())
         if abs(total - 1.0) > 0.01:
             raise ValueError(
-                f"Domain weights must sum to 1.0, got {total:.4f}. "
-                f"Weights: {self.weights}"
+                f"Domain weights must sum to 1.0, got {total:.4f}. Weights: {self.weights}"
             )
 
     # ------------------------------------------------------------------
@@ -130,9 +129,7 @@ class RiskScoringEngine:
                             if s.startswith("domain:")
                         ),
                         matched_techniques=sorted(
-                            s.split(":")[1]
-                            for s in rule.required_signals
-                            if s.startswith("mitre:")
+                            s.split(":")[1] for s in rule.required_signals if s.startswith("mitre:")
                         ),
                         confidence=rule.confidence,
                     )
@@ -153,9 +150,7 @@ class RiskScoringEngine:
         all_mitre: list[str] = []
         for f in normalized:
             all_mitre.extend(f.get("mitre_techniques", []))
-        primary_cat, secondary_cats = classify(
-            all_types, all_mitre, agent_outputs, permissions
-        )
+        primary_cat, secondary_cats = classify(all_types, all_mitre, agent_outputs, permissions)
 
         # Step 10: Collect all MITRE/OWASP mappings
         all_owasp: set[str] = set()
@@ -215,9 +210,7 @@ class RiskScoringEngine:
             "evidence_refs": getattr(f, "evidence_refs", []),
         }
 
-    def _group_by_domain(
-        self, findings: list[dict[str, Any]]
-    ) -> dict[str, list[dict[str, Any]]]:
+    def _group_by_domain(self, findings: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
         """Group normalized findings by scoring domain."""
         groups: dict[str, list[dict[str, Any]]] = defaultdict(list)
         for f in findings:
@@ -277,8 +270,7 @@ class RiskScoringEngine:
                     mitre_techniques=sorted(mitre),
                     owasp_categories=sorted(owasp),
                     description=(
-                        f"{len(findings)} finding(s), max severity-weighted "
-                        f"score {raw:.1f}"
+                        f"{len(findings)} finding(s), max severity-weighted score {raw:.1f}"
                     ),
                 )
             )
@@ -309,10 +301,7 @@ class RiskScoringEngine:
             return 0.5  # no data → moderate confidence
 
         # Base confidence from finding count and severity
-        high_sev_count = sum(
-            1 for f in findings
-            if f["severity"] in ("high", "critical")
-        )
+        high_sev_count = sum(1 for f in findings if f["severity"] in ("high", "critical"))
         base = min(1.0, 0.40 + high_sev_count * 0.08)
 
         # Domain coverage bonus: more domains with findings = more confident

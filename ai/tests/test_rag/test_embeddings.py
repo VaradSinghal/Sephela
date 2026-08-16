@@ -55,9 +55,7 @@ class TestHashingEmbedder:
         related = await embedder.embed_one(
             "The accessibility service performs keylogging of banking apps"
         )
-        unrelated = await embedder.embed_one(
-            "Recipe for sourdough bread using a wheat starter"
-        )
+        unrelated = await embedder.embed_one("Recipe for sourdough bread using a wheat starter")
         assert cosine_similarity(query, related) > cosine_similarity(query, unrelated)
 
     async def test_empty_text_embeds_to_zero(self) -> None:
@@ -125,9 +123,7 @@ class TestOpenAICompatibleEmbedder:
             return httpx.Response(200, json=api_response([[1.0, 0.0]] * len(inputs)))
 
         client = client_for(handler)
-        embedder = OpenAICompatibleEmbedder(
-            model="m", dimensions=2, batch_size=2, client=client
-        )
+        embedder = OpenAICompatibleEmbedder(model="m", dimensions=2, batch_size=2, client=client)
         async with client:
             vectors = await embedder.embed(["a", "b", "c", "d", "e"])
         assert calls == [2, 2, 1]

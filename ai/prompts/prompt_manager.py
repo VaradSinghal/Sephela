@@ -26,10 +26,9 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Optional, Type
+from typing import Any
 
 from pydantic import BaseModel
 
@@ -59,7 +58,8 @@ CRITICAL SECURITY INSTRUCTIONS — READ BEFORE PROCEEDING:
 # Schema injection
 # ---------------------------------------------------------------------------
 
-def _schema_block(schema: Optional[Type[BaseModel]]) -> str:
+
+def _schema_block(schema: type[BaseModel] | None) -> str:
     """Render a JSON schema block for injection into a prompt."""
     if schema is None:
         return ""
@@ -67,9 +67,7 @@ def _schema_block(schema: Optional[Type[BaseModel]]) -> str:
     return (
         "\n\n## REQUIRED OUTPUT SCHEMA\n\n"
         "Your response MUST be a single JSON object conforming exactly to this schema:\n\n"
-        "```json\n"
-        + json.dumps(schema_dict, indent=2)
-        + "\n```\n\n"
+        "```json\n" + json.dumps(schema_dict, indent=2) + "\n```\n\n"
         "Do not include any text outside the JSON object."
     )
 
@@ -77,6 +75,7 @@ def _schema_block(schema: Optional[Type[BaseModel]]) -> str:
 # ---------------------------------------------------------------------------
 # Template loading
 # ---------------------------------------------------------------------------
+
 
 @lru_cache(maxsize=32)
 def _load_template(agent_name: str) -> str:
@@ -88,6 +87,7 @@ def _load_template(agent_name: str) -> str:
     # Fallback: use system prompt from SYSTEM_PROMPTS dict
     try:
         from ai.prompts.shared.system_prompts import SYSTEM_PROMPTS
+
         return SYSTEM_PROMPTS.get(agent_name, "")
     except ImportError:
         return ""
@@ -105,7 +105,7 @@ class PromptManager:
     One instance is created per agent and reused across invocations.
     """
 
-    def __init__(self, agent_name: str, schema: Optional[Type[BaseModel]] = None) -> None:
+    def __init__(self, agent_name: str, schema: type[BaseModel] | None = None) -> None:
         self.agent_name = agent_name
         self.schema = schema
         self._system_template = _load_template(agent_name)
@@ -160,21 +160,15 @@ class PromptManager:
         evidence: dict[str, Any],
         context: dict[str, Any],
         all_findings: list[dict[str, Any]],
-        deterministic_baseline: Optional[dict[str, Any]] = None,
+        deterministic_baseline: dict[str, Any] | None = None,
     ) -> str:
         """
         Specialised user prompt builder for the RiskAgent.
 
         Includes deterministic score baseline + all prior findings.
         """
-        agent_outputs = {
-            k: v for k, v in context.items()
-            if k.endswith("_output") and v
-        }
-        agent_findings = {
-            k: v for k, v in context.items()
-            if k.endswith("_findings") and v
-        }
+        agent_outputs = {k: v for k, v in context.items() if k.endswith("_output") and v}
+        {k: v for k, v in context.items() if k.endswith("_findings") and v}
 
         parts = [
             "## ALL ANALYSIS FINDINGS",
@@ -216,7 +210,7 @@ class PromptManager:
         self,
         evidence: dict[str, Any],
         context: dict[str, Any],
-        risk_result: Optional[dict[str, Any]],
+        risk_result: dict[str, Any] | None,
         all_findings: list[dict[str, Any]],
     ) -> str:
         """Specialised user prompt builder for ReportAgent."""
@@ -224,8 +218,14 @@ class PromptManager:
         sha256 = evidence.get("sample_sha256") or evidence.get("apk_sha256", "unknown")
 
         agent_summaries = {}
-        for agent in ("manifest_agent", "permission_agent", "code_agent",
-                      "api_agent", "network_agent", "threat_intel_agent"):
+        for agent in (
+            "manifest_agent",
+            "permission_agent",
+            "code_agent",
+            "api_agent",
+            "network_agent",
+            "threat_intel_agent",
+        ):
             out = context.get(f"{agent}_output", {})
             if out:
                 agent_summaries[agent] = _truncate_dict(out, 1500)
@@ -256,6 +256,7 @@ class PromptManager:
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _summarise_context(context: dict[str, Any]) -> str:
     """Render a trimmed context summary (avoid token explosion)."""

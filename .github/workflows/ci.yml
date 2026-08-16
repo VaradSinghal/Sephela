@@ -201,6 +201,10 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
       - name: Install the AI subsystem
         run: pip install -e "./ai[dev]"
+      - name: Ruff check (lint)
+        run: cd ai && ruff check .
+      - name: Ruff format (check)
+        run: cd ai && ruff format --check .
       - name: Run tests
         run: pytest ai/tests
 

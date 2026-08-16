@@ -27,6 +27,9 @@ install-engines: ## Install analysis engines into the backend venv (editable)
 install-ai:    ## Install the GenAI subsystem (the AI stage imports `ai`)
 	pip install -e ai
 
+bootstrap-admin: ## Create the first org + admin user: make bootstrap-admin ORG="Bank" EMAIL=a@b.c
+	cd backend && python -m app.cli bootstrap "$(ORG)" "$(EMAIL)" --generate-password
+
 test:          ## Run backend tests (needs install-ai: app.tasks.ai imports `ai`)
 	cd backend && pytest
 
@@ -46,11 +49,17 @@ rag-ingest:    ## Ingest the knowledge corpus into the configured vector store
 sandbox-build: ## Build the isolated dynamic-analysis sandbox image (needs KVM)
 	$(SANDBOX_COMPOSE) build
 
-lint:          ## Lint (backend)
+lint:          ## Lint (backend + AI subsystem)
 	cd backend && ruff check .
+	cd ai && ruff check .
 
-fmt:           ## Format (backend)
+fmt:           ## Format (backend + AI subsystem)
 	cd backend && ruff format .
+	cd ai && ruff format .
+
+fmt-check:     ## Check formatting without rewriting (CI gate)
+	cd backend && ruff format --check .
+	cd ai && ruff format --check .
 
 type:          ## Type-check (backend)
 	cd backend && mypy app
@@ -82,6 +91,7 @@ fmt-fe-check:  ## Check frontend formatting (CI gate)
 
 ci-gates:      ## Run ALL CI gates locally (lint, type, test, security, import, format)
 	$(MAKE) lint
+	$(MAKE) fmt-check
 	$(MAKE) type
 	$(MAKE) test-cov
 	$(MAKE) test-ai

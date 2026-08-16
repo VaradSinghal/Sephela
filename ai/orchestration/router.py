@@ -27,13 +27,13 @@ Architecture:
 
 from __future__ import annotations
 
+from datetime import UTC
 from typing import Any, Literal
 
 from ai.orchestration.graph_state import (
     AgentRunStatus,
     GraphState,
     PipelineStatus,
-    all_analysis_agents_done,
 )
 
 # ---------------------------------------------------------------------------
@@ -54,11 +54,7 @@ def _count_failed(state: GraphState, agent_names: list[str]) -> int:
     """Count how many of the given agents are in a failed/timed-out state."""
     terminal_failure = {AgentRunStatus.FAILED.value, AgentRunStatus.TIMED_OUT.value}
     results = state.get("agent_results", {})
-    return sum(
-        1
-        for name in agent_names
-        if results.get(name, {}).get("status") in terminal_failure
-    )
+    return sum(1 for name in agent_names if results.get(name, {}).get("status") in terminal_failure)
 
 
 # ---------------------------------------------------------------------------
@@ -182,7 +178,7 @@ async def abort_node(state: GraphState) -> dict[str, Any]:
     """
     Terminal abort node.  Sets pipeline_status = FAILED and records reason.
     """
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     job_id = state.get("job_id", "unknown")
     evidence = state.get("evidence")
@@ -199,19 +195,25 @@ async def abort_node(state: GraphState) -> dict[str, Any]:
     else:
         reason = f"Too many agent failures: {failed_agents}"
 
-    import logging, json
+    import json
+    import logging
+
     _log = logging.getLogger("sephela.orchestrator")
-    _log.error(json.dumps({
-        "ts": datetime.now(timezone.utc).isoformat(),
-        "level": "error",
-        "event": "pipeline_abort",
-        "job_id": job_id,
-        "reason": reason,
-        "failed_agents": failed_agents,
-    }))
+    _log.error(
+        json.dumps(
+            {
+                "ts": datetime.now(UTC).isoformat(),
+                "level": "error",
+                "event": "pipeline_abort",
+                "job_id": job_id,
+                "reason": reason,
+                "failed_agents": failed_agents,
+            }
+        )
+    )
 
     return {
         "pipeline_status": PipelineStatus.FAILED.value,
         "error": reason,
-        "completed_at": datetime.now(timezone.utc).isoformat(),
+        "completed_at": datetime.now(UTC).isoformat(),
     }

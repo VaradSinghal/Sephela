@@ -88,8 +88,7 @@ class QdrantVectorStore(VectorStore):
             return {"status": "not_found", "result": None}
         if response.status_code >= 400:
             raise VectorStoreError(
-                f"qdrant: HTTP {response.status_code} on {method} {path}: "
-                f"{response.text[:200]}"
+                f"qdrant: HTTP {response.status_code} on {method} {path}: {response.text[:200]}"
             )
         try:
             payload = response.json()
@@ -136,9 +135,7 @@ class QdrantVectorStore(VectorStore):
 
     async def upsert(self, chunks: list[Chunk], vectors: list[list[float]]) -> int:
         if len(chunks) != len(vectors):
-            raise VectorStoreError(
-                f"upsert got {len(chunks)} chunks and {len(vectors)} vectors"
-            )
+            raise VectorStoreError(f"upsert got {len(chunks)} chunks and {len(vectors)} vectors")
         if not chunks:
             return 0
 
@@ -208,9 +205,7 @@ class QdrantVectorStore(VectorStore):
         await self._request(
             "POST",
             f"/collections/{self.collection}/points/delete?wait=true",
-            json_body={
-                "filter": {"must": [{"key": "doc_id", "match": {"value": doc_id}}]}
-            },
+            json_body={"filter": {"must": [{"key": "doc_id", "match": {"value": doc_id}}]}},
         )
         # Qdrant's delete-by-filter reports operation status, not a row count.
         return -1
@@ -276,15 +271,11 @@ def _build_filter(filters: SearchFilter) -> dict[str, Any]:
         # untrusted trust value added later is then denied by default.
         from ai.rag.models import TRUSTED_SOURCES
 
-        must.append(
-            {"key": "trust", "match": {"any": sorted(t.value for t in TRUSTED_SOURCES)}}
-        )
+        must.append({"key": "trust", "match": {"any": sorted(t.value for t in TRUSTED_SOURCES)}})
     if filters.kinds:
         must.append({"key": "kind", "match": {"any": [k.value for k in filters.kinds]}})
     if filters.families:
-        must.append(
-            {"key": "families", "match": {"any": [f.lower() for f in filters.families]}}
-        )
+        must.append({"key": "families", "match": {"any": [f.lower() for f in filters.families]}})
     if filters.mitre:
         must.append({"key": "mitre", "match": {"any": list(filters.mitre)}})
     if filters.tags:

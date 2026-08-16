@@ -25,18 +25,15 @@ from __future__ import annotations
 
 import json
 import logging
-from dataclasses import dataclass, field
-from typing import Any, Optional, Type
+from typing import Any
 
 from pydantic import BaseModel
 
-from ai.validation.json_repair import JSONRepair
 from ai.validation.schema_validator import (
     FieldIssue,
     IssueSeverity,
     SchemaValidator,
     ValidationReport,
-    ValidationStatus,
 )
 
 _LOG = logging.getLogger("sephela.validation.response")
@@ -64,15 +61,19 @@ def _check_mitre_mappings(data: dict[str, Any]) -> list[_RuleViolation]:
         severity = f.get("severity", "")
         mitre = f.get("mitre_techniques") or f.get("mitre_mappings") or []
         if severity in ("critical", "high") and not mitre:
-            violations.append(_RuleViolation(
-                f"findings[{i}].mitre_techniques",
-                f"Finding '{f.get('title', i)}' is {severity} but has no MITRE mappings",
-                IssueSeverity.WARNING,
-            ))
+            violations.append(
+                _RuleViolation(
+                    f"findings[{i}].mitre_techniques",
+                    f"Finding '{f.get('title', i)}' is {severity} but has no MITRE mappings",
+                    IssueSeverity.WARNING,
+                )
+            )
     return violations
 
 
-def _check_evidence_refs(data: dict[str, Any], evidence: Optional[dict[str, Any]]) -> list[_RuleViolation]:
+def _check_evidence_refs(
+    data: dict[str, Any], evidence: dict[str, Any] | None
+) -> list[_RuleViolation]:
     """Validate that evidence_refs point to extractors present in the evidence envelope."""
     if not evidence:
         return []
@@ -85,12 +86,14 @@ def _check_evidence_refs(data: dict[str, Any], evidence: Optional[dict[str, Any]
                 continue
             extractor = ref.get("extractor", "")
             if extractor and extractor not in available_extractors:
-                violations.append(_RuleViolation(
-                    f"{field_name}[{i}].extractor",
-                    f"Evidence reference points to unknown extractor '{extractor}'. "
-                    f"Available: {sorted(available_extractors)}",
-                    IssueSeverity.WARNING,
-                ))
+                violations.append(
+                    _RuleViolation(
+                        f"{field_name}[{i}].extractor",
+                        f"Evidence reference points to unknown extractor '{extractor}'. "
+                        f"Available: {sorted(available_extractors)}",
+                        IssueSeverity.WARNING,
+                    )
+                )
     return violations
 
 
@@ -99,13 +102,14 @@ def _check_confidence_range(data: dict[str, Any]) -> list[_RuleViolation]:
     violations: list[_RuleViolation] = []
     for field_name in ("confidence_overall", "confidence", "classification_confidence"):
         val = data.get(field_name)
-        if val is not None and isinstance(val, (int, float)):
-            if not (0.0 <= float(val) <= 1.0):
-                violations.append(_RuleViolation(
+        if val is not None and isinstance(val, (int, float)) and not (0.0 <= float(val) <= 1.0):
+            violations.append(
+                _RuleViolation(
                     field_name,
                     f"Confidence {val} outside [0.0, 1.0]",
                     IssueSeverity.ERROR,
-                ))
+                )
+            )
     return violations
 
 
@@ -114,13 +118,14 @@ def _check_score_range(data: dict[str, Any]) -> list[_RuleViolation]:
     violations: list[_RuleViolation] = []
     for field_name in ("score", "permission_risk_score"):
         val = data.get(field_name)
-        if val is not None and isinstance(val, (int, float)):
-            if not (0.0 <= float(val) <= 100.0):
-                violations.append(_RuleViolation(
+        if val is not None and isinstance(val, (int, float)) and not (0.0 <= float(val) <= 100.0):
+            violations.append(
+                _RuleViolation(
                     field_name,
                     f"Score {val} outside [0.0, 100.0]",
                     IssueSeverity.ERROR,
-                ))
+                )
+            )
     return violations
 
 
@@ -147,7 +152,7 @@ class ResponseValidator:
 
     def __init__(
         self,
-        schema: Type[BaseModel],
+        schema: type[BaseModel],
         allow_partial: bool = True,
     ) -> None:
         self._schema_validator = SchemaValidator(schema, allow_partial=allow_partial)
@@ -156,7 +161,7 @@ class ResponseValidator:
     def validate(
         self,
         raw_text: str,
-        evidence: Optional[dict[str, Any]] = None,
+        evidence: dict[str, Any] | None = None,
         agent_name: str = "",
     ) -> ValidationReport:
         """
@@ -183,11 +188,13 @@ class ResponseValidator:
                 if evidence:
                     violations.extend(_check_evidence_refs(data, evidence))
                 for v in violations:
-                    report.issues.append(FieldIssue(
-                        field_path=v.field,
-                        message=v.message,
-                        severity=v.severity,
-                    ))
+                    report.issues.append(
+                        FieldIssue(
+                            field_path=v.field,
+                            message=v.message,
+                            severity=v.severity,
+                        )
+                    )
             except Exception as exc:  # noqa: BLE001
                 _LOG.warning("Business rule check failed: %s", exc)
 
@@ -211,7 +218,7 @@ class ResponseValidator:
     def validate_dict(
         self,
         data: dict[str, Any],
-        evidence: Optional[dict[str, Any]] = None,
+        evidence: dict[str, Any] | None = None,
         agent_name: str = "",
     ) -> ValidationReport:
         """
@@ -229,11 +236,13 @@ class ResponseValidator:
                 if evidence:
                     violations.extend(_check_evidence_refs(data, evidence))
                 for v in violations:
-                    report.issues.append(FieldIssue(
-                        field_path=v.field,
-                        message=v.message,
-                        severity=v.severity,
-                    ))
+                    report.issues.append(
+                        FieldIssue(
+                            field_path=v.field,
+                            message=v.message,
+                            severity=v.severity,
+                        )
+                    )
             except Exception as exc:  # noqa: BLE001
                 _LOG.warning("Business rule check failed: %s", exc)
 

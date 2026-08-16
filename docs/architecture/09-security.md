@@ -35,10 +35,44 @@ architecture, not a layer. Threat model below (STRIDE-oriented) + controls.
 | **Elevation** | Least-privilege RBAC (admin/analyst/viewer), no ambient service creds, scoped tokens |
 
 ## AuthN / AuthZ
-- Phase 2: JWT placeholder. Target: enterprise OIDC/SAML SSO.
-- **RBAC** (Phase 14): roles gate endpoints + fields (e.g. only analyst+ can
-  download raw APK/evidence). **Multi-tenant isolation** via `org_id` on all rows;
-  enforce with PostgreSQL Row-Level Security + app-layer checks (defense in depth).
+
+**Implemented (Phase 14)** — `backend/app/core/security.py`:
+
+- **Local credentials**, bcrypt with a SHA-256 pre-hash so passphrases over 72 bytes
+  are not silently truncated to a shared prefix. Access tokens are short; refresh
+  tokens rotate on every use and are type-checked, so a refresh token cannot be
+  presented as an access token.
+- **The token is an identifier, not a source of truth.** `role` and `org_id` are read
+  from the `users` row on every request, never from a claim. A signed token asserting
+  `role: admin` on another tenant is inert, and deactivating a user takes effect on
+  their next request rather than when their token expires.
+- **RBAC** as an ordered ladder (`viewer < analyst < admin`): viewers read status and
+  findings; analyst+ is required to upload, cancel, or read raw evidence envelopes
+  (which carry decompiled strings and captured traffic from live malware); admin
+  reads the audit trail.
+- **Multi-tenant isolation** by passing `org_id` into the repository rather than
+  filtering after the fetch — a missed check is then a missing argument rather than a
+  forgotten `if`. Another tenant's job returns **404, not 403**: confirming that a
+  job exists is itself a disclosure.
+- **No user enumeration** at login — unknown email, wrong password, and disabled
+  account return one identical 401, and the unknown-email path still burns a hash
+  comparison so the timing matches.
+- **Append-only `audit_logs`** with `UPDATE`/`DELETE` revoked from the app role
+  (migration `0004`), covering logins (failures included, committed even though the
+  request errors), uploads, evidence access, and cancellations.
+- **Per-principal rate limits** (Redis; tighter bucket for uploads) and a streaming
+  upload cap, so a multi-gigabyte POST cannot exhaust a pod's memory before the size
+  check runs.
+- **Boot-time refusal** to run any non-`local` environment on placeholder secrets.
+
+**Remaining**: enterprise OIDC/SAML SSO — the seam exists (`PrincipalResolver`,
+`register_resolver`), so a provider plugs in behind the same `get_current_user`
+dependency without touching route signatures. PostgreSQL Row-Level Security is not
+yet enabled, so app-layer scoping is the single enforcement point today rather than
+the intended defence in depth.
+
+There is no self-service registration, by design — tenants are banks. Provisioning is
+an operator action: `python -m app.cli bootstrap "Bank" admin@bank.example`.
 
 ## Data governance
 - Data classification: APK bytes = "hostile/confidential"; reports = "confidential".

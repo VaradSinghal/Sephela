@@ -5,12 +5,9 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from pydantic import BaseModel
-
-from ai.schemas.base import Finding, Severity, Confidence, EvidenceRef
-from ai.schemas.api import APIAnalysis, APICall, DangerousAPI
-from ai.agents.base import BaseAgent, AgentConfig, AgentResult
-
+from ai.agents.base import AgentConfig, BaseAgent
+from ai.schemas.api import APIAnalysis
+from ai.schemas.base import EvidenceRef, Finding, Severity
 
 DANGEROUS_API_SIGNATURES = {
     "crypto_misuse": {
@@ -301,35 +298,38 @@ Analyze and output a complete APIAnalysis object with:
     def parse_output(self, raw_output: str) -> APIAnalysis:
         try:
             data = json.loads(raw_output)
-        except json.JSONDecodeError:
+        except json.JSONDecodeError as exc:
             import re
-            match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', raw_output, re.DOTALL)
+
+            match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", raw_output, re.DOTALL)
             if match:
                 data = json.loads(match.group(1))
             else:
-                raise ValueError("Could not parse agent output as JSON")
+                raise ValueError("Could not parse agent output as JSON") from exc
 
         return APIAnalysis(**data)
 
     def extract_findings(self, output: APIAnalysis) -> list[Finding]:
         findings = []
         for api_call in output.api_calls:
-            findings.append(Finding(
-                id=f"api_{api_call.api_class}_{api_call.api_method}",
-                type="dangerous_api",
-                severity=api_call.severity,
-                confidence=api_call.confidence,
-                title=f"Dangerous API: {api_call.api_class}.{api_call.api_method}",
-                description=f"API called from {len(api_call.call_sites)} site(s). Data flow: {len(api_call.data_flow)} trace(s). Reflection: {api_call.is_reflection}, Dynamic: {api_call.is_dynamic_loading}",
-                evidence_refs=[EvidenceRef(extractor="api_usage", path="call_sites")],
-                mitre_techniques=api_call.mitre_techniques,
-                owasp_mobile=api_call.owasp_categories,
-                metadata={
-                    "api_class": api_call.api_class,
-                    "api_method": api_call.api_method,
-                    "call_sites": api_call.call_sites,
-                    "is_reflection": api_call.is_reflection,
-                    "is_dynamic_loading": api_call.is_dynamic_loading,
-                }
-            ))
+            findings.append(
+                Finding(
+                    id=f"api_{api_call.api_class}_{api_call.api_method}",
+                    type="dangerous_api",
+                    severity=api_call.severity,
+                    confidence=api_call.confidence,
+                    title=f"Dangerous API: {api_call.api_class}.{api_call.api_method}",
+                    description=f"API called from {len(api_call.call_sites)} site(s). Data flow: {len(api_call.data_flow)} trace(s). Reflection: {api_call.is_reflection}, Dynamic: {api_call.is_dynamic_loading}",
+                    evidence_refs=[EvidenceRef(extractor="api_usage", path="call_sites")],
+                    mitre_techniques=api_call.mitre_techniques,
+                    owasp_mobile=api_call.owasp_categories,
+                    metadata={
+                        "api_class": api_call.api_class,
+                        "api_method": api_call.api_method,
+                        "call_sites": api_call.call_sites,
+                        "is_reflection": api_call.is_reflection,
+                        "is_dynamic_loading": api_call.is_dynamic_loading,
+                    },
+                )
+            )
         return findings

@@ -47,7 +47,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from typing import Any
 
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph import END, StateGraph
@@ -107,7 +107,7 @@ class WorkflowConfig:
     """
 
     llm_client: Any = None
-    checkpointer: Optional[BaseCheckpointSaver] = None
+    checkpointer: BaseCheckpointSaver | None = None
     analysis_timeout_s: float = 180.0
     risk_timeout_s: float = 120.0
     report_timeout_s: float = 120.0
@@ -201,9 +201,14 @@ def build_workflow(cfg: WorkflowConfig) -> Any:  # returns CompiledStateGraph
 
     # Apply per-agent config overrides if provided
     for agent in (
-        manifest_agent, permission_agent, code_agent,
-        api_agent, network_agent, threat_intel_agent,
-        risk_agent, report_agent,
+        manifest_agent,
+        permission_agent,
+        code_agent,
+        api_agent,
+        network_agent,
+        threat_intel_agent,
+        risk_agent,
+        report_agent,
     ):
         overrides = cfg.agent_overrides.get(agent.config.name, {})
         for k, v in overrides.items():
@@ -394,7 +399,7 @@ def build_workflow(cfg: WorkflowConfig) -> Any:  # returns CompiledStateGraph
 # ---------------------------------------------------------------------------
 
 
-def get_mermaid_diagram(cfg: Optional[WorkflowConfig] = None) -> str:
+def get_mermaid_diagram(cfg: WorkflowConfig | None = None) -> str:
     """
     Return a Mermaid diagram string representing the compiled workflow graph.
 

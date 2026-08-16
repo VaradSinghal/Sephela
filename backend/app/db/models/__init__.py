@@ -10,10 +10,14 @@ from app.db.models.analysis import (
     StageRun,
     StageStatus,
 )
+from app.db.models.audit import AuditAction, AuditLog, AuditOutcome
 from app.db.models.identity import Organization, Role, User
 
 __all__ = [
     "AnalysisJob",
+    "AuditAction",
+    "AuditLog",
+    "AuditOutcome",
     "Enrichment",
     "Evidence",
     "Finding",

@@ -208,7 +208,5 @@ def chunk_documents(
 ) -> list[Chunk]:
     chunks: list[Chunk] = []
     for doc in docs:
-        chunks.extend(
-            chunk_document(doc, max_tokens=max_tokens, overlap_tokens=overlap_tokens)
-        )
+        chunks.extend(chunk_document(doc, max_tokens=max_tokens, overlap_tokens=overlap_tokens))
     return chunks

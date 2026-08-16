@@ -110,7 +110,9 @@ class TestTrustEnforcement:
 
 
 class TestTwoPassSearch:
-    async def test_an_attributed_query_runs_a_filtered_and_an_unfiltered_pass(self, embedder) -> None:  # type: ignore[no-untyped-def]
+    async def test_an_attributed_query_runs_a_filtered_and_an_unfiltered_pass(
+        self, embedder
+    ) -> None:  # type: ignore[no-untyped-def]
         # Filtering the whole search on the family would drop every general
         # technique document, so both passes are needed.
         store = RecordingStore()
@@ -142,13 +144,16 @@ class TestTwoPassSearch:
                     doc_id="fam.md",
                     families=["cerberus"],
                     kind=DocumentKind.malware_family,
-                    text="# Cerberus\n\n" + "Cerberus draws overlay windows over banking apps to steal credentials. " * 3,
+                    text="# Cerberus\n\n"
+                    + "Cerberus draws overlay windows over banking apps to steal credentials. " * 3,
                 ),
                 make_doc(
                     doc_id="tech.md",
                     families=[],
                     kind=DocumentKind.technique,
-                    text="# Overlays\n\n" + "Overlay windows are drawn over other applications to phish credentials. " * 3,
+                    text="# Overlays\n\n"
+                    + "Overlay windows are drawn over other applications to phish credentials. "
+                    * 3,
                 ),
             ],
         )
@@ -179,7 +184,13 @@ class TestDiversity:
             store,
             embedder,
             [
-                make_doc(doc_id=f"d{i}.md", text=f"# D{i}\n\nOverlay credential theft in document {i} described at length here.")
+                make_doc(
+                    doc_id=f"d{i}.md",
+                    text=(
+                        f"# D{i}\n\nOverlay credential theft in document {i} "
+                        "described at length here."
+                    ),
+                )
                 for i in range(4)
             ],
         )
@@ -195,7 +206,11 @@ class TestBudget:
             store,
             embedder,
             [
-                make_doc(doc_id=f"d{i}.md", text=f"# D{i}\n\n" + "Overlay credential theft description repeated for length. " * 20)
+                make_doc(
+                    doc_id=f"d{i}.md",
+                    text=f"# D{i}\n\n"
+                    + "Overlay credential theft description repeated for length. " * 20,
+                )
                 for i in range(5)
             ],
         )
@@ -259,12 +274,12 @@ class TestGracefulDegradation:
 
 class TestDeduplication:
     def test_identical_text_is_collapsed(self) -> None:
-        chunks = chunk_document(make_doc(doc_id="a.md")) + chunk_document(
-            make_doc(doc_id="b.md")
-        )
+        chunks = chunk_document(make_doc(doc_id="a.md")) + chunk_document(make_doc(doc_id="b.md"))
         assert len(deduplicate_chunks(chunks)) < len(chunks)
 
     def test_whitespace_differences_do_not_defeat_it(self) -> None:
         base = chunk_document(make_doc())[0]
-        spaced = Chunk(**{**base.__dict__, "chunk_id": "other", "text": base.text.replace(" ", "  ")})
+        spaced = Chunk(
+            **{**base.__dict__, "chunk_id": "other", "text": base.text.replace(" ", "  ")}
+        )
         assert len(deduplicate_chunks([base, spaced])) == 1

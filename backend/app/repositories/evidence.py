@@ -49,14 +49,8 @@ class EvidenceRepository:
         await self.session.flush()
         return row
 
-    async def list_for_job(
-        self, job_id: uuid.UUID, *, engine: str | None = None
-    ) -> list[Evidence]:
-        stmt = (
-            select(Evidence)
-            .where(Evidence.job_id == job_id)
-            .order_by(Evidence.created_at.asc())
-        )
+    async def list_for_job(self, job_id: uuid.UUID, *, engine: str | None = None) -> list[Evidence]:
+        stmt = select(Evidence).where(Evidence.job_id == job_id).order_by(Evidence.created_at.asc())
         if engine is not None:
             stmt = stmt.where(Evidence.engine_name == engine)
         result = await self.session.execute(stmt)

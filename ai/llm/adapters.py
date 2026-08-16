@@ -14,10 +14,9 @@ Providers implemented
 
 from __future__ import annotations
 
-import json
-import time
 import logging
-from typing import Any, Optional
+import time
+from typing import Any
 
 import httpx
 
@@ -25,7 +24,6 @@ from ai.llm.provider import (
     BaseLLMProvider,
     ChatCompletionRequest,
     ChatCompletionResponse,
-    ChatMessage,
     ProviderName,
     TokenUsage,
 )
@@ -61,7 +59,7 @@ class AnthropicAdapter(BaseLLMProvider):
     def __init__(self, api_key: str, base_url: str = _ANTHROPIC_BASE) -> None:
         self._api_key = api_key
         self._base_url = base_url
-        self._client: Optional[httpx.AsyncClient] = None
+        self._client: httpx.AsyncClient | None = None
 
     @property
     def provider_name(self) -> ProviderName:
@@ -165,7 +163,7 @@ class OpenAIAdapter(BaseLLMProvider):
         self._api_key = api_key
         self._base_url = base_url
         self._provider = provider
-        self._client: Optional[httpx.AsyncClient] = None
+        self._client: httpx.AsyncClient | None = None
 
     @property
     def provider_name(self) -> ProviderName:
@@ -261,7 +259,7 @@ class OpenRouterAdapter(BaseLLMProvider):
         self._api_key = api_key
         self._site_url = site_url
         self._site_name = site_name
-        self._client: Optional[httpx.AsyncClient] = None
+        self._client: httpx.AsyncClient | None = None
 
     @property
     def provider_name(self) -> ProviderName:
@@ -349,7 +347,7 @@ class LocalAdapter(BaseLLMProvider):
     def __init__(self, base_url: str, api_key: str = "local") -> None:
         self._base_url = base_url.rstrip("/")
         self._api_key = api_key
-        self._client: Optional[httpx.AsyncClient] = None
+        self._client: httpx.AsyncClient | None = None
 
     @property
     def provider_name(self) -> ProviderName:

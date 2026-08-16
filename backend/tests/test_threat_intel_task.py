@@ -58,9 +58,7 @@ class FakeEnvelope:
 class FakeEngine:
     """Stands in for sephela_threat_intel; ``analyze`` is async, as the real one is."""
 
-    def __init__(
-        self, payload: dict[str, Any] | None = None, exc: Exception | None = None
-    ) -> None:
+    def __init__(self, payload: dict[str, Any] | None = None, exc: Exception | None = None) -> None:
         self.payload = payload or {
             "envelope_version": "1.0",
             "status": "ok",

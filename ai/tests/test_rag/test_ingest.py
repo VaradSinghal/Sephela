@@ -199,7 +199,9 @@ class TestIngestDocuments:
 
 
 class TestIngestDirectory:
-    async def test_a_corpus_directory_is_walked_recursively(self, tmp_path, store, embedder) -> None:  # type: ignore[no-untyped-def]
+    async def test_a_corpus_directory_is_walked_recursively(
+        self, tmp_path, store, embedder
+    ) -> None:  # type: ignore[no-untyped-def]
         write(tmp_path, "families/cerberus.md", VALID)
         write(tmp_path, "techniques/overlay.md", VALID.replace("malware_family", "technique"))
 
@@ -211,7 +213,9 @@ class TestIngestDirectory:
             "techniques/overlay.md",
         }
 
-    async def test_rejected_files_are_reported_not_silently_skipped(self, tmp_path, store, embedder) -> None:  # type: ignore[no-untyped-def]
+    async def test_rejected_files_are_reported_not_silently_skipped(
+        self, tmp_path, store, embedder
+    ) -> None:  # type: ignore[no-untyped-def]
         # An operator needs to know why their corpus file never appears.
         write(tmp_path, "good.md", VALID)
         write(tmp_path, "bad.md", "# No front matter\n\nBody.")
@@ -222,7 +226,9 @@ class TestIngestDirectory:
         assert report.documents_rejected == 1
         assert report.rejections[0][0] == "bad.md"
 
-    async def test_a_missing_directory_is_reported_not_raised(self, tmp_path, store, embedder) -> None:  # type: ignore[no-untyped-def]
+    async def test_a_missing_directory_is_reported_not_raised(
+        self, tmp_path, store, embedder
+    ) -> None:  # type: ignore[no-untyped-def]
         report = await KnowledgeIngestor(store, embedder).ingest_directory(tmp_path / "nope")
         assert report.documents_rejected == 1
         assert "does not exist" in report.rejections[0][1]

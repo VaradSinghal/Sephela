@@ -3,22 +3,23 @@
 from __future__ import annotations
 
 import json
-from typing import Any, Dict, List, Optional, Type
 from dataclasses import dataclass
+from typing import Any
 
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel
 
-from ai.validation.output_validator import OutputValidator, ValidationResult
+from ai.validation.output_validator import OutputValidator
 
 
 @dataclass
 class SchemaEnforcementResult:
     """Result of schema enforcement."""
+
     is_valid: bool
-    validated_output: Optional[BaseModel] = None
+    validated_output: BaseModel | None = None
     raw_output: str = ""
-    errors: List[str] = None
-    warnings: List[str] = None
+    errors: list[str] = None
+    warnings: list[str] = None
     repair_attempts: int = 0
 
     def __post_init__(self):
@@ -33,7 +34,7 @@ class SchemaEnforcer:
 
     def __init__(
         self,
-        schema_class: Type[BaseModel],
+        schema_class: type[BaseModel],
         enable_repair: bool = True,
         max_repair_attempts: int = 3,
         strict_mode: bool = False,
@@ -46,7 +47,9 @@ class SchemaEnforcer:
     def enforce(self, raw_output: str) -> SchemaEnforcementResult:
         """Enforce schema on raw output."""
         if self.enable_repair:
-            validation_result = self.validator.validate_and_repair(raw_output, self.max_repair_attempts)
+            validation_result = self.validator.validate_and_repair(
+                raw_output, self.max_repair_attempts
+            )
             repair_attempts = self.max_repair_attempts if not validation_result.is_valid else 0
         else:
             validation_result = self.validator.validate(raw_output)
@@ -61,11 +64,11 @@ class SchemaEnforcer:
             repair_attempts=repair_attempts,
         )
 
-    def enforce_batch(self, outputs: List[str]) -> List[SchemaEnforcementResult]:
+    def enforce_batch(self, outputs: list[str]) -> list[SchemaEnforcementResult]:
         """Enforce schema on multiple outputs."""
         return [self.enforce(output) for output in outputs]
 
-    def get_schema_requirements(self) -> Dict[str, Any]:
+    def get_schema_requirements(self) -> dict[str, Any]:
         """Get schema requirements as a dictionary for prompt inclusion."""
         return self.validator.schema_class.model_json_schema()
 
@@ -81,7 +84,7 @@ class SchemaEnforcer:
 
     def _generate_example_value(self, field_info) -> Any:
         """Generate example value for a field."""
-        from typing import get_origin, get_args
+        from typing import get_args, get_origin
 
         annotation = field_info.annotation
         origin = get_origin(annotation)
@@ -95,7 +98,11 @@ class SchemaEnforcer:
             return [self._generate_example_value_for_type(item_type)]
         elif origin is dict:
             key_type, value_type = args if len(args) == 2 else (str, str)
-            return {self._generate_example_value_for_type(key_type): self._generate_example_value_for_type(value_type)}
+            return {
+                self._generate_example_value_for_type(
+                    key_type
+                ): self._generate_example_value_for_type(value_type)
+            }
         elif origin is type(None) or (origin is not None and type(None) in args):
             return None
         else:

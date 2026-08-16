@@ -20,14 +20,10 @@ call site never needs to branch on provider type.
 from __future__ import annotations
 
 import abc
-import json
 import logging
-import time
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Optional, Type
-
-from pydantic import BaseModel
+from typing import Any
 
 _LOG = logging.getLogger("sephela.llm")
 
@@ -72,7 +68,7 @@ class ChatCompletionRequest:
     max_tokens: int = 8192
     top_p: float = 1.0
     stop_sequences: list[str] = field(default_factory=list)
-    response_format: Optional[str] = None   # "json_object" | "text"
+    response_format: str | None = None  # "json_object" | "text"
     extra_params: dict[str, Any] = field(default_factory=dict)
     timeout_s: float = 120.0
 
@@ -103,7 +99,7 @@ class ChatCompletionResponse:
     usage: TokenUsage
     latency_ms: int
     finish_reason: str  # "stop" | "max_tokens" | "error"
-    raw: Any = None     # raw provider response for debugging
+    raw: Any = None  # raw provider response for debugging
 
 
 # ---------------------------------------------------------------------------
@@ -150,4 +146,10 @@ class BaseLLMProvider(abc.ABC):
         """
 
     async def close(self) -> None:
-        """Release underlying HTTP client resources (optional override)."""
+        """Release underlying HTTP client resources.
+
+        A no-op default rather than an abstractmethod: a provider that holds no
+        connection (a local or in-process one) should not be forced to implement an
+        empty override just to satisfy the interface.
+        """
+        return None

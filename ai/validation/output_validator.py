@@ -4,17 +4,16 @@ from __future__ import annotations
 
 import json
 import re
-from typing import Any, Dict, List, Optional, Type
 from dataclasses import dataclass
 from enum import Enum
+from typing import Any
 
 from pydantic import BaseModel, ValidationError
-
-from ai.agents.base import AgentError
 
 
 class ValidationSeverity(str, Enum):
     """Severity of validation issue."""
+
     ERROR = "error"
     WARNING = "warning"
     INFO = "info"
@@ -23,10 +22,11 @@ class ValidationSeverity(str, Enum):
 @dataclass
 class ValidationIssue:
     """Single validation issue."""
+
     field: str
     message: str
     severity: ValidationSeverity
-    expected_type: Optional[str] = None
+    expected_type: str | None = None
     received_value: Any = None
     path: str = ""
 
@@ -34,9 +34,10 @@ class ValidationIssue:
 @dataclass
 class ValidationResult:
     """Result of output validation."""
+
     is_valid: bool
-    issues: List[ValidationIssue] = None
-    parsed_output: Optional[BaseModel] = None
+    issues: list[ValidationIssue] = None
+    parsed_output: BaseModel | None = None
     raw_output: str = ""
 
     def __post_init__(self):
@@ -45,25 +46,33 @@ class ValidationResult:
 
     def add_error(self, field: str, message: str, **kwargs):
         self.is_valid = False
-        self.issues.append(ValidationIssue(field=field, message=message, severity=ValidationSeverity.ERROR, **kwargs))
+        self.issues.append(
+            ValidationIssue(
+                field=field, message=message, severity=ValidationSeverity.ERROR, **kwargs
+            )
+        )
 
     def add_warning(self, field: str, message: str, **kwargs):
-        self.issues.append(ValidationIssue(field=field, message=message, severity=ValidationSeverity.WARNING, **kwargs))
+        self.issues.append(
+            ValidationIssue(
+                field=field, message=message, severity=ValidationSeverity.WARNING, **kwargs
+            )
+        )
 
-    def get_errors(self) -> List[ValidationIssue]:
+    def get_errors(self) -> list[ValidationIssue]:
         return [i for i in self.issues if i.severity == ValidationSeverity.ERROR]
 
-    def get_warnings(self) -> List[ValidationIssue]:
+    def get_warnings(self) -> list[ValidationIssue]:
         return [i for i in self.issues if i.severity == ValidationSeverity.WARNING]
 
 
 class OutputValidator:
     """Validates agent outputs against Pydantic schemas with auto-repair."""
 
-    def __init__(self, schema_class: Type[BaseModel], strict: bool = False):
+    def __init__(self, schema_class: type[BaseModel], strict: bool = False):
         self.schema_class = schema_class
         self.strict = strict
-        self.json_pattern = re.compile(r'```(?:json)?\s*(\{.*?\})\s*```', re.DOTALL)
+        self.json_pattern = re.compile(r"```(?:json)?\s*(\{.*?\})\s*```", re.DOTALL)
 
     def validate(self, raw_output: str) -> ValidationResult:
         """Validate raw output against schema."""
@@ -119,7 +128,7 @@ class OutputValidator:
 
         return result
 
-    def _extract_json(self, text: str) -> Optional[str]:
+    def _extract_json(self, text: str) -> str | None:
         """Extract JSON from text, handling markdown code blocks."""
         # Try markdown code blocks first
         matches = self.json_pattern.findall(text)
@@ -131,11 +140,11 @@ class OutputValidator:
         start = text.find("{")
         end = text.rfind("}")
         if start != -1 and end != -1 and end > start:
-            return text[start:end+1]
+            return text[start : end + 1]
 
         return None
 
-    def _attempt_repair(self, raw_output: str, result: ValidationResult) -> Optional[str]:
+    def _attempt_repair(self, raw_output: str, result: ValidationResult) -> str | None:
         """Attempt to repair invalid output."""
         json_str = self._extract_json(raw_output)
         if not json_str:
@@ -169,7 +178,7 @@ class OutputValidator:
 
     def _get_default_value(self, field_info) -> Any:
         """Get default value for a field based on its type."""
-        from typing import get_origin, get_args
+        from typing import get_args, get_origin
 
         annotation = field_info.annotation
         origin = get_origin(annotation)
@@ -194,11 +203,11 @@ class OutputValidator:
 
     def _coerce_type(self, value: Any, field_info) -> Any:
         """Coerce value to expected type."""
-        from typing import get_origin, get_args
+        from typing import get_args, get_origin
 
         annotation = field_info.annotation
         origin = get_origin(annotation)
-        args = get_args(annotation)
+        get_args(annotation)
 
         if value is None:
             return self._get_default_value(field_info)

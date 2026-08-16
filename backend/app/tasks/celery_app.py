@@ -35,11 +35,11 @@ WORKLOAD_QUEUES = (
 celery_app.conf.update(
     task_default_queue="intake",
     task_queues=tuple(Queue(name) for name in WORKLOAD_QUEUES),
-    task_acks_late=True,                 # redeliver if a worker dies mid-task
+    task_acks_late=True,  # redeliver if a worker dies mid-task
     task_reject_on_worker_lost=True,
-    worker_prefetch_multiplier=1,        # backpressure for heavy tasks
+    worker_prefetch_multiplier=1,  # backpressure for heavy tasks
     task_track_started=True,
-    task_time_limit=30 * 60,             # hard limit (per-task overrides later)
+    task_time_limit=30 * 60,  # hard limit (per-task overrides later)
     task_soft_time_limit=25 * 60,
     result_expires=60 * 60 * 24,
     timezone="UTC",

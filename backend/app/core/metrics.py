@@ -99,9 +99,7 @@ def _normalize_path(path: str) -> str:
     normalized: list[str] = []
     for part in parts:
         # UUID-shaped or numeric → placeholder
-        if len(part) == 36 and part.count("-") == 4:
-            normalized.append("{id}")
-        elif part.isdigit():
+        if len(part) == 36 and part.count("-") == 4 or part.isdigit():
             normalized.append("{id}")
         else:
             normalized.append(part)
@@ -111,10 +109,11 @@ def _normalize_path(path: str) -> str:
 class MetricsMiddleware(BaseHTTPMiddleware):
     """Record RED metrics for every HTTP request."""
 
-    async def dispatch(
-        self, request: Request, call_next: RequestResponseEndpoint
-    ) -> Response:
-        if _REQUEST_COUNT is None:
+    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
+        # All three collectors are created together, but the guard names each one
+        # so a partially-initialised module degrades to "no metrics" instead of
+        # raising AttributeError on every request.
+        if _REQUEST_COUNT is None or _REQUEST_DURATION is None or _ERROR_COUNT is None:
             return await call_next(request)
 
         method = request.method

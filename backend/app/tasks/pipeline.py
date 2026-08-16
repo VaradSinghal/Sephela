@@ -36,7 +36,7 @@ from __future__ import annotations
 
 import asyncio
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from celery import chain
 from sqlalchemy import select
@@ -96,7 +96,7 @@ async def _start(job_id: str) -> str:
             return job.status.value  # idempotent no-op
 
         job.status = JobStatus.running
-        job.started_at = datetime.now(timezone.utc)
+        job.started_at = datetime.now(UTC)
         job.progress = 0
         await session.commit()
         logger.info("pipeline_started", job_id=job_id)
@@ -122,7 +122,7 @@ async def _finalize(job_id: str) -> str:
         job.status = derive_job_status(stages)
         job.error = _stage_errors(stages)
         job.progress = 100
-        job.completed_at = datetime.now(timezone.utc)
+        job.completed_at = datetime.now(UTC)
         await session.commit()
         logger.info(
             "pipeline_finalized",

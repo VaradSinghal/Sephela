@@ -52,9 +52,7 @@ async def _run(corpus: str | None, force: bool) -> int:
 def main() -> int:
     parser = argparse.ArgumentParser(prog="python -m ai.rag", description=__doc__)
     parser.add_argument("--corpus", default=None, help="corpus directory (default: bundled)")
-    parser.add_argument(
-        "--force", action="store_true", help="re-embed unchanged documents"
-    )
+    parser.add_argument("--force", action="store_true", help="re-embed unchanged documents")
     parser.add_argument("--quiet", action="store_true", help="suppress log output")
     args = parser.parse_args()
 

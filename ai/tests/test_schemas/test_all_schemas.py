@@ -1,17 +1,16 @@
 """Tests for all schema definitions."""
 
 import pytest
-from pydantic import ValidationError
 
-from ai.schemas.base import Finding, Severity, Confidence, EvidenceRef
-from ai.schemas.manifest import ManifestAnalysis, ComponentInfo, PermissionFinding
-from ai.schemas.permission import PermissionAnalysis, PermissionRisk, PermissionGroupRisk
-from ai.schemas.code import CodeAnalysis, CodeSummary, ClassInfo, MethodInfo
-from ai.schemas.api import APIAnalysis, APICall, DangerousAPI
-from ai.schemas.network import NetworkAnalysis, NetworkConnection, DomainIntel
-from ai.schemas.threat_intel import ThreatIntelAnalysis, IOCMatch, MalwareFamily
-from ai.schemas.risk import RiskAnalysis, RiskFactor, RiskBreakdown, RiskTier
+from ai.schemas.api import APICall, DangerousAPI
+from ai.schemas.base import Confidence, EvidenceRef, Finding, Severity
+from ai.schemas.code import ClassInfo, CodeAnalysis, CodeSummary, MethodInfo
+from ai.schemas.manifest import ComponentInfo, ManifestAnalysis, PermissionFinding
+from ai.schemas.network import DomainIntel, NetworkAnalysis, NetworkConnection
+from ai.schemas.permission import PermissionAnalysis, PermissionGroupRisk, PermissionRisk
 from ai.schemas.report import AnalysisReport, ExecutiveSummary, ReportFormat
+from ai.schemas.risk import RiskAnalysis, RiskBreakdown, RiskFactor, RiskTier
+from ai.schemas.threat_intel import IOCMatch, MalwareFamily, ThreatIntelAnalysis
 
 
 class TestBaseSchemas:
@@ -115,7 +114,17 @@ class TestPermissionSchemas:
 
     def test_permission_analysis(self):
         analysis = PermissionAnalysis(
-            dangerous_permissions=[PermissionRisk(permission="SMS", protection_level="dangerous", risk_score=1.0, severity=Severity.critical, confidence=Confidence.high, rationale="") for _ in range(10)],
+            dangerous_permissions=[
+                PermissionRisk(
+                    permission="SMS",
+                    protection_level="dangerous",
+                    risk_score=1.0,
+                    severity=Severity.critical,
+                    confidence=Confidence.high,
+                    rationale="",
+                )
+                for _ in range(10)
+            ],
             financial_risk_score=0.85,
         )
         assert analysis.total_permissions == 10
@@ -230,7 +239,16 @@ class TestNetworkSchemas:
 
     def test_network_analysis(self):
         analysis = NetworkAnalysis(
-            domain_intel=[DomainIntel(domain="malicious.tk", is_malicious=True, categories=[], reputation_score=1.0, is_dga=False, is_newly_registered=False)],
+            domain_intel=[
+                DomainIntel(
+                    domain="malicious.tk",
+                    is_malicious=True,
+                    categories=[],
+                    reputation_score=1.0,
+                    is_dga=False,
+                    is_newly_registered=False,
+                )
+            ],
             domains=["example.com", "malicious.tk"],
             ips=["1.2.3.4"],
             findings=[],
@@ -269,7 +287,18 @@ class TestThreatIntelSchemas:
 
     def test_threat_intel_analysis(self):
         analysis = ThreatIntelAnalysis(
-            hash_matches=[IOCMatch(indicator="a", indicator_type="hash", source="OTX", confidence=Confidence.high, severity=Severity.high, tags=[], malware_families=[]) for _ in range(5)],
+            hash_matches=[
+                IOCMatch(
+                    indicator="a",
+                    indicator_type="hash",
+                    source="OTX",
+                    confidence=Confidence.high,
+                    severity=Severity.high,
+                    tags=[],
+                    malware_families=[],
+                )
+                for _ in range(5)
+            ],
         )
         assert analysis.total_ioc_matches == 5
 
@@ -295,7 +324,16 @@ class TestRiskSchemas:
 
     def test_risk_breakdown(self):
         breakdown = RiskBreakdown(
-            factors=[RiskFactor(factor_id="1", name="1", category="permissions", weight=1.0, raw_score=85.0, weighted_contribution=85.0)],
+            factors=[
+                RiskFactor(
+                    factor_id="1",
+                    name="1",
+                    category="permissions",
+                    weight=1.0,
+                    raw_score=85.0,
+                    weighted_contribution=85.0,
+                )
+            ],
             total_weight=1.0,
             base_score=85.0,
             final_score=85.0,
@@ -317,7 +355,16 @@ class TestRiskSchemas:
             tier=RiskTier.malicious,
             confidence=0.9,
             breakdown=RiskBreakdown(
-                factors=[RiskFactor(factor_id="1", name="1", category="permissions", weight=1.0, raw_score=85.0, weighted_contribution=85.0)],
+                factors=[
+                    RiskFactor(
+                        factor_id="1",
+                        name="1",
+                        category="permissions",
+                        weight=1.0,
+                        raw_score=85.0,
+                        weighted_contribution=85.0,
+                    )
+                ],
                 total_weight=1.0,
                 base_score=85.0,
                 final_score=85.0,

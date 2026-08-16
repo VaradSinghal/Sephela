@@ -78,9 +78,7 @@ async def _run(job_id: str) -> str:
             await stage.begin()
             return (await stage.fail(exc)).status.value
 
-        stage = StageRunner(
-            session, jid, engine_name=ENGINE_NAME, engine_version=engine_version
-        )
+        stage = StageRunner(session, jid, engine_name=ENGINE_NAME, engine_version=engine_version)
         outcome = await _execute(
             session=session, stage=stage, engine=engine, job_id=job_id, jid=jid, sample=sample
         )
@@ -124,9 +122,7 @@ async def _execute(
         # Upstream stages found nothing enrichable. Recorded as a skip so the job
         # detail page explains the empty result rather than implying a clean bill
         # of health from feeds that were never asked.
-        return await stage.skip(
-            "No enrichable indicators were found in upstream evidence."
-        )
+        return await stage.skip("No enrichable indicators were found in upstream evidence.")
 
     cache = EnrichmentCacheRepository(
         session,

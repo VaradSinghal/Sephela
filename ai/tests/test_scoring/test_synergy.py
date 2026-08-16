@@ -120,6 +120,5 @@ class TestSynergyEvaluation:
         """Every synergy rule has at least 2 required signals."""
         for rule in SYNERGY_RULES:
             assert len(rule.required_signals) >= 2, (
-                f"Rule {rule.rule_id} needs at least 2 signals, "
-                f"has {len(rule.required_signals)}"
+                f"Rule {rule.rule_id} needs at least 2 signals, has {len(rule.required_signals)}"
             )

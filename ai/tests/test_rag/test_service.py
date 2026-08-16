@@ -70,7 +70,9 @@ class TestContextForAgent:
 
     async def test_the_retrieval_is_traced_for_auditing(self, store, embedder) -> None:  # type: ignore[no-untyped-def]
         service = await build_loaded_service(store, embedder)
-        await service.context_for(TROJAN_EVIDENCE, findings=TROJAN_FINDINGS, agent="permission_agent")
+        await service.context_for(
+            TROJAN_EVIDENCE, findings=TROJAN_FINDINGS, agent="permission_agent"
+        )
 
         trace = service.last_summary["permission_agent"]
         assert trace["retrieved"] >= 1
@@ -180,7 +182,9 @@ class ExplodingKnowledge:
 
 
 class TestAgentIntegration:
-    async def test_the_reference_block_is_appended_after_the_evidence(self, store, embedder) -> None:  # type: ignore[no-untyped-def]
+    async def test_the_reference_block_is_appended_after_the_evidence(
+        self, store, embedder
+    ) -> None:  # type: ignore[no-untyped-def]
         # Ordering matters: evidence first keeps the model's attention on the
         # sample rather than on the background reading.
         service = await build_loaded_service(store, embedder)

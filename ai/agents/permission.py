@@ -5,12 +5,9 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from pydantic import BaseModel
-
-from ai.schemas.base import Finding, Severity, Confidence, EvidenceRef
-from ai.schemas.permission import PermissionAnalysis, PermissionRisk, PermissionGroupRisk
-from ai.agents.base import BaseAgent, AgentConfig, AgentResult
-
+from ai.agents.base import AgentConfig, BaseAgent
+from ai.schemas.base import Confidence, EvidenceRef, Finding, Severity
+from ai.schemas.permission import PermissionAnalysis, PermissionGroupRisk, PermissionRisk
 
 # Permission groups for capability analysis
 PERMISSION_GROUPS = {
@@ -132,12 +129,14 @@ Output a complete PermissionAnalysis object with:
 - Findings with MITRE/OWASP mappings"""
 
     def build_prompt(self, evidence: dict[str, Any], context: dict[str, Any]) -> str:
-        manifest_evidence = evidence.get("manifest", {})
+        evidence.get("manifest", {})
         permission_evidence = evidence.get("permissions", {})
         code_evidence = context.get("code_agent_output", {})
 
         permissions = permission_evidence.get("permissions", [])
-        code_permissions = code_evidence.get("summary", {}).get("permissions_used", []) if code_evidence else []
+        code_permissions = (
+            code_evidence.get("summary", {}).get("permissions_used", []) if code_evidence else []
+        )
 
         return f"""Analyze these Android permissions for security risk:
 
@@ -167,21 +166,24 @@ Output complete PermissionAnalysis object."""
     def parse_output(self, raw_output: str) -> PermissionAnalysis:
         try:
             data = json.loads(raw_output)
-        except json.JSONDecodeError:
+        except json.JSONDecodeError as exc:
             import re
-            match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', raw_output, re.DOTALL)
+
+            match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", raw_output, re.DOTALL)
             if match:
                 data = json.loads(match.group(1))
             else:
-                raise ValueError("Could not parse agent output as JSON")
+                raise ValueError("Could not parse agent output as JSON") from exc
         return PermissionAnalysis(**data)
 
 
-def analyze_permissions_deterministic(evidence: dict[str, Any], code_context: dict[str, Any] = None) -> PermissionAnalysis:
+def analyze_permissions_deterministic(
+    evidence: dict[str, Any], code_context: dict[str, Any] = None
+) -> PermissionAnalysis:
     """Deterministic permission analysis without LLM."""
     permission_evidence = evidence.get("permissions", {})
     permissions = permission_evidence.get("permissions", [])
-    
+
     code_permissions = set()
     if code_context:
         code_permissions = set(code_context.get("summary", {}).get("permissions_used", []))
@@ -194,7 +196,7 @@ def analyze_permissions_deterministic(evidence: dict[str, Any], code_context: di
     for perm in permissions:
         in_code = perm in code_permissions
         risk = _assess_permission_risk(perm, in_code)
-        
+
         if "dangerous" in perm.lower() or perm in BANKING_HIGH_RISK:
             dangerous_risks.append(risk)
         elif "signature" in perm.lower():
@@ -207,37 +209,51 @@ def analyze_permissions_deterministic(evidence: dict[str, Any], code_context: di
     # Group by capability
     groups = []
     for group_name, group_perms in PERMISSION_GROUPS.items():
-        group_risks = [r for r in dangerous_risks + signature_risks + custom_risks if r.permission in group_perms]
+        group_risks = [
+            r
+            for r in dangerous_risks + signature_risks + custom_risks
+            if r.permission in group_perms
+        ]
         if group_risks:
             aggregate = sum(r.risk_score for r in group_risks) / len(group_risks)
             severity = _score_to_severity(aggregate)
             capabilities = _get_capabilities(group_name, group_risks)
-            groups.append(PermissionGroupRisk(
-                group_name=group_name,
-                permissions=group_risks,
-                aggregate_risk=aggregate,
-                severity=severity,
-                capabilities_enabled=capabilities,
-            ))
+            groups.append(
+                PermissionGroupRisk(
+                    group_name=group_name,
+                    permissions=group_risks,
+                    aggregate_risk=aggregate,
+                    severity=severity,
+                    capabilities_enabled=capabilities,
+                )
+            )
 
     # Banking relevant
-    banking_risks = [r for r in dangerous_risks + signature_risks + custom_risks if r.permission in BANKING_HIGH_RISK]
-    financial_score = sum(BANKING_HIGH_RISK.get(r.permission, 0) * r.risk_score for r in banking_risks) / max(len(banking_risks), 1)
+    banking_risks = [
+        r
+        for r in dangerous_risks + signature_risks + custom_risks
+        if r.permission in BANKING_HIGH_RISK
+    ]
+    financial_score = sum(
+        BANKING_HIGH_RISK.get(r.permission, 0) * r.risk_score for r in banking_risks
+    ) / max(len(banking_risks), 1)
 
     # Findings
     findings = []
     for risk in dangerous_risks + signature_risks + custom_risks:
-        findings.append(Finding(
-            id=f"perm_risk:{risk.permission}",
-            type="permission_risk",
-            severity=risk.severity,
-            confidence=risk.confidence,
-            title=f"Permission risk: {risk.permission}",
-            description=risk.rationale,
-            evidence_refs=risk.evidence_refs,
-            mitre_techniques=risk.mitre_techniques,
-            owasp_mobile=risk.owasp_categories,
-        ))
+        findings.append(
+            Finding(
+                id=f"perm_risk:{risk.permission}",
+                type="permission_risk",
+                severity=risk.severity,
+                confidence=risk.confidence,
+                title=f"Permission risk: {risk.permission}",
+                description=risk.rationale,
+                evidence_refs=risk.evidence_refs,
+                mitre_techniques=risk.mitre_techniques,
+                owasp_mobile=risk.owasp_categories,
+            )
+        )
 
     return PermissionAnalysis(
         total_permissions=len(permissions),
@@ -350,4 +366,4 @@ def _get_capabilities(group: str, risks: list[PermissionRisk]) -> list[str]:
         "BLUETOOTH": ["proximity_attack", "bluetooth_exploit"],
         "NFC": ["nfc_relay", "payment_theft"],
     }
-    return caps.get(group, [])
+    return caps.get(group, [])

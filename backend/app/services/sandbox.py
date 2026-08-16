@@ -182,9 +182,7 @@ class SubprocessSandboxRunner(SandboxRunner):
 
         tail = (stdout or b"").decode("utf-8", errors="replace")[-2000:]
         if proc.returncode != 0:
-            raise SandboxError(
-                f"Sandbox exited {proc.returncode}. Output tail:\n{tail}"
-            )
+            raise SandboxError(f"Sandbox exited {proc.returncode}. Output tail:\n{tail}")
 
         produced = [name for name in ARTIFACT_FILES if (output_dir / name).is_file()]
         if not produced:

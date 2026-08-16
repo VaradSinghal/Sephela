@@ -176,9 +176,7 @@ def test_non_list_findings_yield_nothing() -> None:
 
 
 def test_oversized_strings_are_truncated_to_column_widths() -> None:
-    payload = _envelope(
-        findings=[{"id": "x" * 500, "type": "y" * 500, "severity": "z" * 500}]
-    )
+    payload = _envelope(findings=[{"id": "x" * 500, "type": "y" * 500, "severity": "z" * 500}])
     (row,) = _normalize(payload)
     assert len(row.finding_id) == 128
     assert len(row.type) == 64

@@ -47,9 +47,7 @@ class TestControlledVocabulary:
         assert terms["permissions"] == ["android.permission.SEND_SMS"]
 
     def test_vendor_namespaced_permissions_are_accepted(self) -> None:
-        evidence = {
-            "permissions": {"permissions": ["com.google.android.c2dm.permission.RECEIVE"]}
-        }
+        evidence = {"permissions": {"permissions": ["com.google.android.c2dm.permission.RECEIVE"]}}
         assert extract_terms(evidence)["permissions"] == [
             "com.google.android.c2dm.permission.RECEIVE"
         ]
@@ -99,9 +97,7 @@ class TestControlledVocabulary:
 class TestCaps:
     def test_permission_count_is_capped(self) -> None:
         evidence = {
-            "permissions": {
-                "permissions": [f"android.permission.PERM_{i}" for i in range(100)]
-            }
+            "permissions": {"permissions": [f"android.permission.PERM_{i}" for i in range(100)]}
         }
         assert len(extract_terms(evidence)["permissions"]) == MAX_PERMISSIONS
 
@@ -157,9 +153,7 @@ class TestComposition:
         assert "bind accessibility service" in text
 
     def test_api_method_names_are_camel_split(self) -> None:
-        text = compose_query_text(
-            {"apis": ["android.telephony.SmsManager#sendTextMessage"]}
-        )
+        text = compose_query_text({"apis": ["android.telephony.SmsManager#sendTextMessage"]})
         assert "send text message" in text
 
     def test_behaviour_types_are_underscore_split(self) -> None:
@@ -191,9 +185,7 @@ class TestAgentProfiles:
         # technique document and retrieve nothing.
         assert build_query({}).families == []
 
-        findings = [
-            {"type": "family_attribution", "detail": "malware family 'cerberus' seen"}
-        ]
+        findings = [{"type": "family_attribution", "detail": "malware family 'cerberus' seen"}]
         assert build_query({}, findings=findings).families == ["cerberus"]
 
     def test_budgets_are_carried_onto_the_query(self) -> None:

@@ -17,11 +17,10 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from ai.agents.base import BaseAgent, AgentConfig, AgentResult
-from ai.schemas.base import Finding, Severity, Confidence
-from ai.schemas.risk import RiskAnalysis, RiskFactor, RiskBreakdown, RiskTier
+from ai.agents.base import AgentConfig, BaseAgent
+from ai.schemas.base import Finding
+from ai.schemas.risk import RiskAnalysis
 from ai.scoring.engine import RiskScoringEngine
-
 
 # Singleton engine instance — thread-safe (it's stateless after __init__).
 _ENGINE = RiskScoringEngine()
@@ -59,8 +58,12 @@ Output must conform to RiskAnalysis schema."""
         agent_outputs: dict[str, Any] = {}
 
         for agent_name in [
-            "manifest_agent", "permission_agent", "code_agent",
-            "api_agent", "network_agent", "threat_intel_agent",
+            "manifest_agent",
+            "permission_agent",
+            "code_agent",
+            "api_agent",
+            "network_agent",
+            "threat_intel_agent",
         ]:
             findings_key = f"{agent_name}_findings"
             output_key = f"{agent_name}_output"
@@ -120,10 +123,10 @@ Secondary: {scoring_result.secondary_categories}
 {chr(10).join(scoring_result.key_findings)}
 
 === MITRE ATT&CK ===
-{', '.join(scoring_result.mitre_techniques)}
+{", ".join(scoring_result.mitre_techniques)}
 
 === OWASP Mobile ===
-{', '.join(scoring_result.owasp_categories)}
+{", ".join(scoring_result.owasp_categories)}
 
 === ALL FINDINGS ({len(all_findings)} total) ===
 {json.dumps([_finding_summary(f) for f in all_findings[:50]], indent=2)}
@@ -139,13 +142,14 @@ Provide a RiskAnalysis with:
     def parse_output(self, raw_output: str) -> RiskAnalysis:
         try:
             data = json.loads(raw_output)
-        except json.JSONDecodeError:
+        except json.JSONDecodeError as exc:
             import re
-            match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', raw_output, re.DOTALL)
+
+            match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", raw_output, re.DOTALL)
             if match:
                 data = json.loads(match.group(1))
             else:
-                raise ValueError("Could not parse agent output as JSON")
+                raise ValueError("Could not parse agent output as JSON") from exc
 
         return RiskAnalysis(**data)
 

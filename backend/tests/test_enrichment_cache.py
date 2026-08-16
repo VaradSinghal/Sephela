@@ -11,7 +11,7 @@ decisions, not of SQLAlchemy's emitted SQL.
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import pytest
@@ -61,8 +61,8 @@ def fresh_row(**overrides: Any) -> Enrichment:
         "provider": "urlhaus",
         "verdict": "malicious",
         "raw": {"found": True, "_normalized": {"score": 1.0}},
-        "fetched_at": datetime.now(timezone.utc),
-        "expires_at": datetime.now(timezone.utc) + timedelta(hours=1),
+        "fetched_at": datetime.now(UTC),
+        "expires_at": datetime.now(UTC) + timedelta(hours=1),
     }
     return Enrichment(**{**defaults, **overrides})
 
@@ -135,7 +135,7 @@ class TestGet:
 class TestPut:
     async def test_a_verdict_is_written_with_its_ttl(self, repo_factory) -> None:  # type: ignore[no-untyped-def]
         repo, session = repo_factory()
-        before = datetime.now(timezone.utc)
+        before = datetime.now(UTC)
 
         await repo.put(
             DOMAIN, "urlhaus", CachedVerdict(verdict=Verdict.malicious, raw={"a": 1}), ttl=3600

@@ -4,13 +4,15 @@ Revision ID: 0001_initial
 Revises:
 Create Date: 2026-07-04
 """
+
 from __future__ import annotations
 
 from collections.abc import Sequence
 
 import sqlalchemy as sa
-from alembic import op
 from sqlalchemy.dialects import postgresql
+
+from alembic import op
 
 revision: str = "0001_initial"
 down_revision: str | None = None
@@ -33,21 +35,34 @@ def upgrade() -> None:
         "organizations",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
         sa.Column("name", sa.String(255), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.Column(
+            "created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+        ),
+        sa.Column(
+            "updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+        ),
     )
 
     # ---- users ----
     op.create_table(
         "users",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
-        sa.Column("org_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("organizations.id"), nullable=False),
+        sa.Column(
+            "org_id",
+            postgresql.UUID(as_uuid=True),
+            sa.ForeignKey("organizations.id"),
+            nullable=False,
+        ),
         sa.Column("email", sa.String(320), nullable=False),
         sa.Column("hashed_password", sa.String(255), nullable=True),
         sa.Column("role", user_role, nullable=False, server_default="analyst"),
         sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.true()),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.Column(
+            "created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+        ),
+        sa.Column(
+            "updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+        ),
     )
     op.create_index("ix_users_org_id", "users", ["org_id"])
     op.create_unique_constraint("uq_users_email", "users", ["email"])
@@ -64,9 +79,15 @@ def upgrade() -> None:
         sa.Column("original_filename", sa.String(512), nullable=True),
         sa.Column("package_name", sa.String(255), nullable=True),
         sa.Column("storage_uri", sa.Text(), nullable=False),
-        sa.Column("created_by", postgresql.UUID(as_uuid=True), sa.ForeignKey("users.id"), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.Column(
+            "created_by", postgresql.UUID(as_uuid=True), sa.ForeignKey("users.id"), nullable=True
+        ),
+        sa.Column(
+            "created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+        ),
+        sa.Column(
+            "updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+        ),
     )
     op.create_unique_constraint("uq_samples_sha256", "samples", ["sha256"])
     op.create_index("ix_samples_sha256", "samples", ["sha256"])
@@ -76,9 +97,18 @@ def upgrade() -> None:
     op.create_table(
         "analysis_jobs",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
-        sa.Column("sample_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("samples.id"), nullable=False),
-        sa.Column("org_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("organizations.id"), nullable=True),
-        sa.Column("requested_by", postgresql.UUID(as_uuid=True), sa.ForeignKey("users.id"), nullable=True),
+        sa.Column(
+            "sample_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("samples.id"), nullable=False
+        ),
+        sa.Column(
+            "org_id",
+            postgresql.UUID(as_uuid=True),
+            sa.ForeignKey("organizations.id"),
+            nullable=True,
+        ),
+        sa.Column(
+            "requested_by", postgresql.UUID(as_uuid=True), sa.ForeignKey("users.id"), nullable=True
+        ),
         sa.Column("status", job_status, nullable=False, server_default="queued"),
         sa.Column("pipeline_version", sa.String(32), nullable=False),
         sa.Column("priority", sa.Integer(), nullable=False, server_default="5"),
@@ -86,8 +116,12 @@ def upgrade() -> None:
         sa.Column("error", sa.Text(), nullable=True),
         sa.Column("started_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("completed_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.Column(
+            "created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+        ),
+        sa.Column(
+            "updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+        ),
     )
     op.create_index("ix_analysis_jobs_sample_id", "analysis_jobs", ["sample_id"])
     op.create_index("ix_analysis_jobs_org_id", "analysis_jobs", ["org_id"])
@@ -110,8 +144,12 @@ def upgrade() -> None:
         sa.Column("started_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("finished_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("error", sa.Text(), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.Column(
+            "created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+        ),
+        sa.Column(
+            "updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+        ),
     )
     op.create_unique_constraint("uq_stage_job_engine", "stage_runs", ["job_id", "engine_name"])
 

@@ -46,11 +46,7 @@ class TestCategoryClassification:
         primary, _ = classify(
             [],
             [],
-            agent_outputs={
-                "threat_intel_agent": {
-                    "malware_families": [{"family_name": "Anubis"}]
-                }
-            },
+            agent_outputs={"threat_intel_agent": {"malware_families": [{"family_name": "Anubis"}]}},
         )
         assert primary == "banking_trojan"
 
@@ -101,10 +97,6 @@ class TestCategoryClassification:
         primary, _ = classify(
             [],
             [],
-            agent_outputs={
-                "threat_intel_agent": {
-                    "malware_families": ["Cerberus", "EventBot"]
-                }
-            },
+            agent_outputs={"threat_intel_agent": {"malware_families": ["Cerberus", "EventBot"]}},
         )
         assert primary == "banking_trojan"

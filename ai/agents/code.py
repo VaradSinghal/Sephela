@@ -5,12 +5,11 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from pydantic import BaseModel
-
-from ai.schemas.base import Finding, Severity, Confidence, EvidenceRef
-from ai.schemas.code import CodeAnalysis, CodeSummary, ClassInfo, MethodInfo, CallGraph, CallGraphEdge, ControlFlowFinding, APIUsageFinding
-from ai.agents.base import BaseAgent, AgentConfig, AgentResult
-
+from ai.agents.base import AgentConfig, BaseAgent
+from ai.schemas.base import Finding
+from ai.schemas.code import (
+    CodeAnalysis,
+)
 
 DANGEROUS_API_PACKAGES = {
     "crypto": [
@@ -121,8 +120,8 @@ Output must conform to the CodeAnalysis schema with CodeSummary optimized for LL
         static_evidence = evidence.get("static_evidence", {})
         code_intel_evidence = evidence.get("code_intel", {})
 
-        smali_evidence = static_evidence.get("smali", {})
-        decompiled_evidence = static_evidence.get("decompiled_java", {})
+        static_evidence.get("smali", {})
+        static_evidence.get("decompiled_java", {})
         strings_evidence = static_evidence.get("strings", {})
         hashes_evidence = static_evidence.get("hashes", {})
 
@@ -176,7 +175,7 @@ SSDEEP: {hashes_evidence.get("ssdeep", "N/A")}
 TLSH: {hashes_evidence.get("tlsh", "N/A")}
 
 === DANGEROUS API REFERENCE ===
-{json.dumps({k: v for k, v in DANGEROUS_API_PACKAGES.items()}, indent=2)}
+{json.dumps(dict(DANGEROUS_API_PACKAGES.items()), indent=2)}
 
 Analyze and output a complete CodeAnalysis object with:
 1. ControlFlowFinding for each control flow anomaly
@@ -189,13 +188,14 @@ Analyze and output a complete CodeAnalysis object with:
     def parse_output(self, raw_output: str) -> CodeAnalysis:
         try:
             data = json.loads(raw_output)
-        except json.JSONDecodeError:
+        except json.JSONDecodeError as exc:
             import re
-            match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', raw_output, re.DOTALL)
+
+            match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", raw_output, re.DOTALL)
             if match:
                 data = json.loads(match.group(1))
             else:
-                raise ValueError("Could not parse agent output as JSON")
+                raise ValueError("Could not parse agent output as JSON") from exc
 
         return CodeAnalysis(**data)
 
@@ -203,4 +203,4 @@ Analyze and output a complete CodeAnalysis object with:
         findings = []
         findings.extend(output.control_flow_findings)
         findings.extend(output.api_usage_findings)
-        return findings
+        return findings

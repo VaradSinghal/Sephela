@@ -5,13 +5,13 @@ from __future__ import annotations
 import asyncio
 from logging.config import fileConfig
 
-from alembic import context
 from sqlalchemy.ext.asyncio import async_engine_from_config
 from sqlalchemy.pool import NullPool
 
+from alembic import context
 from app.core.config import settings
-from app.db.base import Base
 from app.db import models  # noqa: F401  (register models on metadata)
+from app.db.base import Base
 
 config = context.config
 config.set_main_option("sqlalchemy.url", settings.database_url)
@@ -35,9 +35,7 @@ def run_migrations_offline() -> None:
 
 
 def do_run_migrations(connection) -> None:  # type: ignore[no-untyped-def]
-    context.configure(
-        connection=connection, target_metadata=target_metadata, compare_type=True
-    )
+    context.configure(connection=connection, target_metadata=target_metadata, compare_type=True)
     with context.begin_transaction():
         context.run_migrations()
 

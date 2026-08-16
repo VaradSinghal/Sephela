@@ -16,11 +16,12 @@ Features
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Optional, Type
+from typing import Any
 
 from pydantic import BaseModel, ValidationError
 
@@ -37,7 +38,7 @@ _LOG = logging.getLogger("sephela.validation.schema_validator")
 class ValidationStatus(str, Enum):
     VALID = "valid"
     REPAIRED = "repaired"
-    PARTIAL = "partial"           # Required fields OK, optional fields failed
+    PARTIAL = "partial"  # Required fields OK, optional fields failed
     INVALID = "invalid"
 
 
@@ -58,7 +59,7 @@ class FieldIssue:
     field_path: str
     message: str
     severity: IssueSeverity
-    expected_type: Optional[str] = None
+    expected_type: str | None = None
     received_value: Any = None
 
 
@@ -67,12 +68,12 @@ class ValidationReport:
     """Complete validation report for a single LLM output."""
 
     status: ValidationStatus
-    model_instance: Optional[BaseModel] = None   # populated when status != INVALID
+    model_instance: BaseModel | None = None  # populated when status != INVALID
     issues: list[FieldIssue] = field(default_factory=list)
     raw_text: str = ""
-    repaired_text: Optional[str] = None
-    repair_strategy: Optional[str] = None
-    parse_error: Optional[str] = None
+    repaired_text: str | None = None
+    repair_strategy: str | None = None
+    parse_error: str | None = None
 
     @property
     def is_usable(self) -> bool:
@@ -115,7 +116,7 @@ class SchemaValidator:
 
     def __init__(
         self,
-        schema: Type[BaseModel],
+        schema: type[BaseModel],
         allow_partial: bool = True,
         strict: bool = False,
     ) -> None:
@@ -123,9 +124,7 @@ class SchemaValidator:
         self.allow_partial = allow_partial
         self.strict = strict
         self._required_fields = {
-            name
-            for name, info in schema.model_fields.items()
-            if info.is_required()
+            name for name, info in schema.model_fields.items() if info.is_required()
         }
 
     # ------------------------------------------------------------------
@@ -149,11 +148,13 @@ class SchemaValidator:
                 status=ValidationStatus.INVALID,
                 raw_text=raw_text,
                 parse_error="Could not extract valid JSON from LLM output",
-                issues=[FieldIssue(
-                    field_path="<root>",
-                    message="No valid JSON found. All repair strategies failed.",
-                    severity=IssueSeverity.ERROR,
-                )],
+                issues=[
+                    FieldIssue(
+                        field_path="<root>",
+                        message="No valid JSON found. All repair strategies failed.",
+                        severity=IssueSeverity.ERROR,
+                    )
+                ],
             )
 
         data: dict[str, Any] = repair.data if isinstance(repair.data, dict) else {}
@@ -200,13 +201,15 @@ class SchemaValidator:
             # Collect issues
             for err in exc.errors():
                 path = ".".join(str(p) for p in err["loc"])
-                issues.append(FieldIssue(
-                    field_path=path,
-                    message=err["msg"],
-                    severity=IssueSeverity.ERROR,
-                    expected_type=err.get("type"),
-                    received_value=err.get("input"),
-                ))
+                issues.append(
+                    FieldIssue(
+                        field_path=path,
+                        message=err["msg"],
+                        severity=IssueSeverity.ERROR,
+                        expected_type=err.get("type"),
+                        received_value=err.get("input"),
+                    )
+                )
 
         # Second pass — try coercion
         coerced = _coerce_dict(data, self.schema)
@@ -230,12 +233,14 @@ class SchemaValidator:
             for err in exc2.errors():
                 path = ".".join(str(p) for p in err["loc"])
                 if not any(i.field_path == path for i in coerce_issues):
-                    coerce_issues.append(FieldIssue(
-                        field_path=path,
-                        message=err["msg"],
-                        severity=IssueSeverity.ERROR,
-                        received_value=err.get("input"),
-                    ))
+                    coerce_issues.append(
+                        FieldIssue(
+                            field_path=path,
+                            message=err["msg"],
+                            severity=IssueSeverity.ERROR,
+                            received_value=err.get("input"),
+                        )
+                    )
 
         # Third pass — partial model if allow_partial
         if self.allow_partial:
@@ -259,9 +264,7 @@ class SchemaValidator:
             parse_error=f"{len(coerce_issues)} field errors after all repair attempts",
         )
 
-    def _build_partial(
-        self, data: dict[str, Any], issues: list[FieldIssue]
-    ) -> Optional[BaseModel]:
+    def _build_partial(self, data: dict[str, Any], issues: list[FieldIssue]) -> BaseModel | None:
         """
         Build a model ignoring non-required failing fields.
 
@@ -273,9 +276,7 @@ class SchemaValidator:
             return None
 
         # Remove failing optional fields and try again
-        partial_data = {
-            k: v for k, v in data.items() if k not in failing_paths
-        }
+        partial_data = {k: v for k, v in data.items() if k not in failing_paths}
         try:
             return self.schema.model_validate(partial_data)
         except ValidationError:
@@ -287,7 +288,7 @@ class SchemaValidator:
 # ---------------------------------------------------------------------------
 
 
-def _coerce_dict(data: dict[str, Any], schema: Type[BaseModel]) -> dict[str, Any]:
+def _coerce_dict(data: dict[str, Any], schema: type[BaseModel]) -> dict[str, Any]:
     """
     Apply type coercions to common LLM output mistakes:
     - None → [] for list fields
@@ -304,7 +305,7 @@ def _coerce_dict(data: dict[str, Any], schema: Type[BaseModel]) -> dict[str, Any
         val = result[name]
         ann = field_info.annotation
         origin = get_origin(ann)
-        args = get_args(ann)
+        get_args(ann)
 
         # None → empty list
         if origin is list and val is None:
@@ -316,17 +317,13 @@ def _coerce_dict(data: dict[str, Any], schema: Type[BaseModel]) -> dict[str, Any
             continue
         # str → float
         if ann is float and isinstance(val, str):
-            try:
+            with contextlib.suppress(ValueError):
                 result[name] = float(val)
-            except ValueError:
-                pass
             continue
         # str/float → int
         if ann is int and isinstance(val, (str, float)):
-            try:
+            with contextlib.suppress(ValueError):
                 result[name] = int(float(val))
-            except ValueError:
-                pass
             continue
         # str → bool
         if ann is bool and isinstance(val, str):
@@ -340,19 +337,22 @@ def _validate_confidence_fields(instance: BaseModel, issues: list[FieldIssue]) -
     """Check all fields named 'confidence*' are within 0.0–1.0."""
     data = instance.model_dump()
     for key, value in _flatten_dict(data):
-        if "confidence" in key.lower() and isinstance(value, (int, float)):
-            if not (0.0 <= float(value) <= 1.0):
-                issues.append(FieldIssue(
+        if (
+            "confidence" in key.lower()
+            and isinstance(value, (int, float))
+            and not (0.0 <= float(value) <= 1.0)
+        ):
+            issues.append(
+                FieldIssue(
                     field_path=key,
                     message=f"Confidence value {value} out of range [0.0, 1.0]",
                     severity=IssueSeverity.WARNING,
                     received_value=value,
-                ))
+                )
+            )
 
 
-def _flatten_dict(
-    d: Any, prefix: str = ""
-) -> list[tuple[str, Any]]:
+def _flatten_dict(d: Any, prefix: str = "") -> list[tuple[str, Any]]:
     """Flatten nested dict into dot-separated key/value pairs."""
     items: list[tuple[str, Any]] = []
     if isinstance(d, dict):

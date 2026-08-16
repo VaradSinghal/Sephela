@@ -106,7 +106,9 @@ def _accept(values: Any, pattern: re.Pattern[str], limit: int, *, lower: bool = 
     return out
 
 
-def extract_terms(evidence: dict[str, Any], findings: list[dict[str, Any]] | None = None) -> dict[str, list[str]]:
+def extract_terms(
+    evidence: dict[str, Any], findings: list[dict[str, Any]] | None = None
+) -> dict[str, list[str]]:
     """Pull the controlled-vocabulary terms out of evidence and findings.
 
     Accepts both shapes the AI layer sees: a raw envelope's ``evidence`` block

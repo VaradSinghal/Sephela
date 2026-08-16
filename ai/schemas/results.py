@@ -18,15 +18,13 @@ easy downstream consumption without traversing nested structures.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from enum import Enum
-from typing import Any, Optional
+from datetime import UTC, datetime
+from typing import Any
 from uuid import uuid4
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field
 
-from ai.schemas.base import Confidence, EvidenceRef, Finding, Severity
-
+from ai.schemas.base import Confidence, Finding
 
 # ---------------------------------------------------------------------------
 # Cross-schema canonical types
@@ -39,7 +37,7 @@ class MitreMapping(BaseModel):
     technique_id: str = Field(..., description="ATT&CK technique ID, e.g. T1417.001")
     technique_name: str = Field(..., description="Human-readable name")
     tactic: str = Field(..., description="ATT&CK tactic, e.g. 'Collection'")
-    sub_technique: Optional[str] = None
+    sub_technique: str | None = None
     relevance: str = Field(
         ...,
         description="Why this technique applies to the finding",
@@ -84,9 +82,7 @@ class BaseAnalysisResult(BaseModel):
 
     agent_name: str
     model_used: str
-    analysis_timestamp: str = Field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
-    )
+    analysis_timestamp: str = Field(default_factory=lambda: datetime.now(UTC).isoformat())
     analysis_id: str = Field(default_factory=lambda: uuid4().hex)
 
     # Quality indicators
@@ -142,10 +138,10 @@ class ManifestAnalysisResult(BaseAnalysisResult):
 
     # Core manifest facts
     package_name: str
-    version_name: Optional[str] = None
-    version_code: Optional[int] = None
-    min_sdk: Optional[int] = None
-    target_sdk: Optional[int] = None
+    version_name: str | None = None
+    version_code: int | None = None
+    min_sdk: int | None = None
+    target_sdk: int | None = None
 
     # Security flags
     debuggable: bool = False
@@ -167,7 +163,7 @@ class ManifestAnalysisResult(BaseAnalysisResult):
 
     # Certificate flags
     debug_certificate_detected: bool = False
-    certificate_sha256: Optional[str] = None
+    certificate_sha256: str | None = None
 
     # MITRE / OWASP aggregated across findings
     mitre_mappings: list[MitreMapping] = Field(default_factory=list)
@@ -329,7 +325,7 @@ class ThreatIntelAnalysisResult(BaseAnalysisResult):
     campaigns: list[str] = Field(default_factory=list)
 
     # Highest-confidence classification
-    primary_classification: Optional[str] = None
+    primary_classification: str | None = None
     classification_confidence: Confidence = Confidence.low
 
     # Detailed IOC records
@@ -397,7 +393,10 @@ class RiskAssessmentResult(BaseAnalysisResult):
     # Classification
     primary_category: str = Field(
         ...,
-        description="Malware category: banking_trojan | spyware | ransomware | adware | dropper | rootkit | unknown",
+        description=(
+            "Malware category: banking_trojan | spyware | ransomware | adware | "
+            "dropper | rootkit | unknown"
+        ),
     )
     secondary_categories: list[str] = Field(default_factory=list)
 
@@ -500,9 +499,7 @@ class ReportResult(BaseAnalysisResult):
     job_id: str
     apk_sha256: str
     classification: str = "TLP:AMBER"
-    generated_at: str = Field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
-    )
+    generated_at: str = Field(default_factory=lambda: datetime.now(UTC).isoformat())
     pipeline_version: str = "1.0"
 
     # Sections

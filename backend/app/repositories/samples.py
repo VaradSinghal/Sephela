@@ -6,7 +6,7 @@ Business logic stays in services; SQL/session mechanics live here.
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -38,16 +38,34 @@ class JobRepository:
         await self.session.flush()
         return job
 
-    async def get(self, job_id: uuid.UUID) -> AnalysisJob | None:
-        result = await self.session.execute(
+    async def get(
+        self, job_id: uuid.UUID, *, org_id: uuid.UUID | None = None
+    ) -> AnalysisJob | None:
+        """Fetch a job, optionally constrained to one organisation.
+
+        ``org_id`` is the tenant boundary: passing it makes another org's job
+        indistinguishable from a nonexistent one, which is what callers want —
+        returning 403 for a job that exists confirms its existence to an outsider.
+
+        Worker tasks call this without ``org_id`` because they operate on behalf of
+        the pipeline, not a principal. Every request path must pass it.
+        """
+        stmt = (
             select(AnalysisJob)
             .where(AnalysisJob.id == job_id)
             .options(selectinload(AnalysisJob.stages))
         )
+        if org_id is not None:
+            stmt = stmt.where(AnalysisJob.org_id == org_id)
+        result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
 
     async def list(
-        self, *, status: JobStatus | None = None, limit: int = 50
+        self,
+        *,
+        status: JobStatus | None = None,
+        limit: int = 50,
+        org_id: uuid.UUID | None = None,
     ) -> list[AnalysisJob]:
         stmt = (
             select(AnalysisJob)
@@ -57,6 +75,8 @@ class JobRepository:
         )
         if status is not None:
             stmt = stmt.where(AnalysisJob.status == status)
+        if org_id is not None:
+            stmt = stmt.where(AnalysisJob.org_id == org_id)
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
 
@@ -67,9 +87,7 @@ class JobRepository:
 
     async def get_stage(self, job_id: uuid.UUID, engine_name: str) -> StageRun | None:
         result = await self.session.execute(
-            select(StageRun).where(
-                StageRun.job_id == job_id, StageRun.engine_name == engine_name
-            )
+            select(StageRun).where(StageRun.job_id == job_id, StageRun.engine_name == engine_name)
         )
         return result.scalar_one_or_none()
 
@@ -96,7 +114,7 @@ class JobRepository:
         stage.engine_version = engine_version
         stage.status = StageStatus.running
         stage.attempt += 1
-        stage.started_at = datetime.now(timezone.utc)
+        stage.started_at = datetime.now(UTC)
         stage.finished_at = None
         stage.error = None
         await self.session.flush()
@@ -107,6 +125,6 @@ class JobRepository:
     ) -> StageRun:
         stage.status = status
         stage.error = error
-        stage.finished_at = datetime.now(timezone.utc)
+        stage.finished_at = datetime.now(UTC)
         await self.session.flush()
         return stage

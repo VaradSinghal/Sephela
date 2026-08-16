@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import time
-from typing import Any, AsyncIterator, Dict, List, Optional
+from collections.abc import AsyncIterator
 
 import httpx
 
-from ai.llm.client import LLMClient, LLMConfig, LLMResponse, StreamingChunk, ModelProvider
+from ai.llm.client import LLMClient, LLMConfig, LLMResponse, ModelProvider, StreamingChunk
 
 
 class AnthropicClient(LLMClient):
@@ -17,7 +17,7 @@ class AnthropicClient(LLMClient):
         super().__init__(config)
         self.config.provider = ModelProvider.ANTHROPIC
         self.base_url = config.base_url or "https://api.anthropic.com"
-        self._client: Optional[httpx.AsyncClient] = None
+        self._client: httpx.AsyncClient | None = None
         self.api_version = "2023-06-01"
         self.beta_headers = ["messages-2023-12-15"]
 
@@ -64,7 +64,9 @@ class AnthropicClient(LLMClient):
         latency_ms = int((time.time() - start_time) * 1000)
 
         content = "".join(block["text"] for block in data["content"] if block["type"] == "text")
-        tokens = data.get("usage", {}).get("input_tokens", 0) + data.get("usage", {}).get("output_tokens", 0)
+        tokens = data.get("usage", {}).get("input_tokens", 0) + data.get("usage", {}).get(
+            "output_tokens", 0
+        )
 
         return LLMResponse(
             content=content,
@@ -106,6 +108,7 @@ class AnthropicClient(LLMClient):
                         break
                     try:
                         import json
+
                         data = json.loads(data_str)
                         if data["type"] == "content_block_delta":
                             delta = data["delta"]

@@ -23,7 +23,7 @@ import json
 import logging
 import re
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any
 
 _LOG = logging.getLogger("sephela.validation.json_repair")
 
@@ -39,11 +39,11 @@ class RepairResult:
     """Outcome of a JSON repair attempt."""
 
     success: bool
-    data: Optional[Any] = None                 # parsed Python object if successful
-    repaired_text: Optional[str] = None        # repaired JSON string
+    data: Any | None = None  # parsed Python object if successful
+    repaired_text: str | None = None  # repaired JSON string
     original_text: str = ""
-    strategy_used: Optional[str] = None        # which strategy worked
-    error: Optional[str] = None
+    strategy_used: str | None = None  # which strategy worked
+    error: str | None = None
 
 
 class JSONRepair:

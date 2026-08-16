@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 
-from typing import Any
-from pydantic import BaseModel, Field
 from datetime import datetime
 from enum import Enum
+from typing import Any
+
+from pydantic import BaseModel, Field
 
 
 class ReportFormat(str, Enum):
     """Supported report output formats."""
+
     json = "json"
     markdown = "markdown"
     pdf = "pdf"
@@ -19,6 +21,7 @@ class ReportFormat(str, Enum):
 
 class ReportSection(BaseModel):
     """Individual report section."""
+
     section_id: str
     title: str
     content: str
@@ -30,6 +33,7 @@ class ReportSection(BaseModel):
 
 class ExecutiveSummary(BaseModel):
     """Executive summary for leadership."""
+
     overview: str
     risk_score: float
     risk_tier: str
@@ -41,6 +45,7 @@ class ExecutiveSummary(BaseModel):
 
 class TechnicalDetails(BaseModel):
     """Technical analysis details."""
+
     sample_info: dict[str, Any] = Field(default_factory=dict)
     static_analysis: dict[str, Any] = Field(default_factory=dict)
     code_analysis: dict[str, Any] = Field(default_factory=dict)
@@ -52,6 +57,7 @@ class TechnicalDetails(BaseModel):
 
 class EvidenceCatalog(BaseModel):
     """Catalog of all evidence artifacts."""
+
     static_evidence: list[dict[str, Any]] = Field(default_factory=list)
     dynamic_evidence: list[dict[str, Any]] = Field(default_factory=list)
     network_captures: list[dict[str, Any]] = Field(default_factory=list)
@@ -62,6 +68,7 @@ class EvidenceCatalog(BaseModel):
 
 class ComplianceMapping(BaseModel):
     """Compliance framework mappings."""
+
     mitre_attack: dict[str, list[str]] = Field(default_factory=dict)
     owasp_mobile: dict[str, list[str]] = Field(default_factory=dict)
     nist_csf: dict[str, list[str]] = Field(default_factory=dict)
@@ -71,6 +78,7 @@ class ComplianceMapping(BaseModel):
 
 class AnalysisReport(BaseModel):
     """Complete analysis report."""
+
     # Metadata
     report_id: str
     job_id: str
@@ -79,20 +87,20 @@ class AnalysisReport(BaseModel):
     generated_by: str = "Sephela AI Analysis Pipeline"
     version: str = "1.0"
     format: ReportFormat = ReportFormat.json
-    
+
     # Core content
     executive_summary: ExecutiveSummary
     technical_details: TechnicalDetails
     evidence_catalog: EvidenceCatalog
     compliance_mapping: ComplianceMapping
-    
+
     # Sections for rendered output
     sections: list[ReportSection] = Field(default_factory=list)
-    
+
     # Classification
     classification: str = "TLP:AMBER"
     distribution_restrictions: list[str] = Field(default_factory=list)
-    
+
     def get_section(self, section_id: str) -> ReportSection | None:
         """Get section by ID (recursive)."""
         for section in self.sections:
@@ -106,18 +114,25 @@ class AnalysisReport(BaseModel):
 
 class ReportGenerationRequest(BaseModel):
     """Request to generate a report."""
+
     job_id: str
     format: ReportFormat = ReportFormat.json
-    include_sections: list[str] = Field(default_factory=lambda: [
-        "executive_summary", "technical_details", "evidence_catalog", 
-        "compliance_mapping", "recommendations"
-    ])
+    include_sections: list[str] = Field(
+        default_factory=lambda: [
+            "executive_summary",
+            "technical_details",
+            "evidence_catalog",
+            "compliance_mapping",
+            "recommendations",
+        ]
+    )
     classification: str = "TLP:AMBER"
     custom_template: str | None = None
 
 
 class ReportGenerationResult(BaseModel):
     """Result of report generation."""
+
     report: AnalysisReport
     artifacts: dict[str, str] = Field(default_factory=dict)  # format -> storage URI
     generation_time_ms: int

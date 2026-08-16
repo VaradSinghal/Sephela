@@ -29,6 +29,30 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "UP", "B", "C4", "SIM", "TCH"]
+# Kept in step with backend/pyproject.toml — see the reasoning there. In short:
+# TC00x would hide imports that Pydantic and SQLAlchemy resolve at runtime, and
+# UP042's StrEnum swap changes what str() returns on enums that are serialised into
+# JSON payloads and Postgres enum columns.
+ignore = [
+    "TC001",
+    "TC002",
+    "TC003",
+    "UP042",
+    # UP046 wants the PEP 695 form (`class BaseAgent[T]`) instead of `Generic[T]`.
+    # Purely syntactic, and it rewrites the type contract every agent subclasses —
+    # not worth the blast radius for no behavioural gain.
+    "UP046",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# These modules are mostly prompt bodies held in triple-quoted strings. Whitespace
+# inside a prompt is part of what the model receives, so reflowing a long line to
+# satisfy E501 edits the payload — the same reason applied migrations are exempt in
+# backend/pyproject.toml. Long lines in the *code* around the prompts are still
+# worth avoiding; the linter cannot tell the two apart, so this is a judgement the
+# reviewer keeps rather than one the gate makes.
+"prompts/**/*.py" = ["E501"]
+"agents/*.py" = ["E501"]
 
 [tool.mypy]
 python_version = "3.12"

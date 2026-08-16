@@ -2,18 +2,19 @@
 
 from __future__ import annotations
 
-from contextlib import asynccontextmanager
 from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.v1.router import api_router
-from app.core.config import settings
+from app.core.config import assert_production_ready, settings
 from app.core.exceptions import register_exception_handlers
 from app.core.logging import configure_logging, get_logger
 from app.core.metrics import setup_metrics
 from app.core.middleware import TraceMiddleware
+from app.core.ratelimit import RateLimitMiddleware
 from app.core.redis import redis_client
 from app.core.telemetry import instrument_app
 from app.db.session import engine
@@ -33,6 +34,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 def create_app() -> FastAPI:
     configure_logging()
+    # Fail at boot rather than serving traffic signed with a placeholder key.
+    assert_production_ready(settings)
     app = FastAPI(
         title=settings.project_name,
         version="0.1.0",
@@ -42,6 +45,9 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
+    # Middleware runs outermost-last: TraceMiddleware is added first so it wraps the
+    # rate limiter, which means a 429 still gets a trace id and an access-log line.
+    app.add_middleware(RateLimitMiddleware)
     app.add_middleware(TraceMiddleware)
     app.add_middleware(
         CORSMiddleware,

@@ -45,9 +45,7 @@ class SourceTrust(str, Enum):
 
 
 #: The allowlist. Membership here is what makes a document eligible for a prompt.
-TRUSTED_SOURCES: frozenset[SourceTrust] = frozenset(
-    {SourceTrust.curated, SourceTrust.vendor}
-)
+TRUSTED_SOURCES: frozenset[SourceTrust] = frozenset({SourceTrust.curated, SourceTrust.vendor})
 
 
 def is_trusted(trust: SourceTrust) -> bool:

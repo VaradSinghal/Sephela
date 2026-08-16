@@ -3,13 +3,15 @@
 from __future__ import annotations
 
 from typing import Any
+
 from pydantic import BaseModel, Field, HttpUrl
 
-from ai.schemas.base import Finding, Severity, Confidence, EvidenceRef
+from ai.schemas.base import Finding, Severity
 
 
 class NetworkConnection(BaseModel):
     """Observed or declared network connection."""
+
     host: str
     port: int | None = None
     protocol: str = Field(..., pattern="^(http|https|tcp|udp|ws|wss)$")
@@ -21,6 +23,7 @@ class NetworkConnection(BaseModel):
 
 class DomainIntel(BaseModel):
     """Domain intelligence from TI."""
+
     domain: str
     is_malicious: bool = False
     categories: list[str] = Field(default_factory=list)
@@ -36,6 +39,7 @@ class DomainIntel(BaseModel):
 
 class IPIntel(BaseModel):
     """IP intelligence from TI."""
+
     ip: str
     is_malicious: bool = False
     categories: list[str] = Field(default_factory=list)
@@ -51,6 +55,7 @@ class IPIntel(BaseModel):
 
 class CertificateInfo(BaseModel):
     """SSL/TLS certificate details."""
+
     subject: str
     issuer: str
     serial_number: str
@@ -65,7 +70,11 @@ class CertificateInfo(BaseModel):
 
 class NetworkFinding(Finding):
     """Network-specific finding."""
-    finding_type: str = Field(..., pattern="^(c2|data_exfil|insecure_config|suspicious_domain|pinning_bypass|cleartext|cert_pinning)$")
+
+    finding_type: str = Field(
+        ...,
+        pattern="^(c2|data_exfil|insecure_config|suspicious_domain|pinning_bypass|cleartext|cert_pinning)$",
+    )
     indicator: str
     indicator_type: str = Field(..., pattern="^(domain|ip|url|certificate)$")
     ti_context: DomainIntel | IPIntel | CertificateInfo | None = None
@@ -75,28 +84,29 @@ class NetworkFinding(Finding):
 
 class NetworkAnalysis(BaseModel):
     """Complete network analysis output."""
+
     # Extracted indicators
     domains: list[str] = Field(default_factory=list)
     ips: list[str] = Field(default_factory=list)
     urls: list[HttpUrl] = Field(default_factory=list)
     certificates: list[CertificateInfo] = Field(default_factory=list)
-    
+
     # Connections
     connections: list[NetworkConnection] = Field(default_factory=list)
-    
+
     # TI enrichment
     domain_intel: list[DomainIntel] = Field(default_factory=list)
     ip_intel: list[IPIntel] = Field(default_factory=list)
-    
+
     # Findings
     findings: list[NetworkFinding] = Field(default_factory=list)
-    
+
     # Configuration
     network_security_config: str | None = None
     cleartext_permitted: bool = False
     pinning_implemented: bool = False
     pinning_bypass_detected: bool = False
-    
+
     # Summary
     malicious_domain_count: int = 0
     malicious_ip_count: int = 0
@@ -111,7 +121,7 @@ class NetworkAnalysis(BaseModel):
         self.malicious_domain_count = sum(1 for d in self.domain_intel if d.is_malicious)
         self.malicious_ip_count = sum(1 for i in self.ip_intel if i.is_malicious)
         self.suspicious_connection_count = sum(1 for c in self.connections if c.is_suspicious)
-        
+
         for f in self.findings:
             if f.severity == Severity.critical:
                 self.critical_findings += 1

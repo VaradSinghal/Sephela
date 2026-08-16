@@ -11,11 +11,10 @@ from __future__ import annotations
 import operator
 from datetime import datetime
 from enum import Enum
-from typing import Annotated, Any, Optional
+from typing import Annotated, Any
 from uuid import uuid4
 
 from typing_extensions import TypedDict
-
 
 # ---------------------------------------------------------------------------
 # Enumerations
@@ -54,17 +53,17 @@ class AgentResultEntry(TypedDict, total=False):
     """Serialisable record stored per agent in graph state."""
 
     agent_name: str
-    status: str                         # AgentRunStatus value
-    output: Optional[dict[str, Any]]    # agent's parsed Pydantic model as dict
-    findings: list[dict[str, Any]]      # list of Finding.model_dump()
-    errors: list[dict[str, Any]]        # list of AgentError dicts
+    status: str  # AgentRunStatus value
+    output: dict[str, Any] | None  # agent's parsed Pydantic model as dict
+    findings: list[dict[str, Any]]  # list of Finding.model_dump()
+    errors: list[dict[str, Any]]  # list of AgentError dicts
     execution_time_ms: int
     tokens_used: int
     model_name: str
     retry_count: int
-    started_at: Optional[str]           # ISO-8601
-    completed_at: Optional[str]         # ISO-8601
-    span_id: Optional[str]              # OpenTelemetry span ID
+    started_at: str | None  # ISO-8601
+    completed_at: str | None  # ISO-8601
+    span_id: str | None  # OpenTelemetry span ID
 
 
 # ---------------------------------------------------------------------------
@@ -74,6 +73,7 @@ class AgentResultEntry(TypedDict, total=False):
 # LangGraph uses annotated reducers to merge state updates from parallel nodes.
 # operator.add on lists → concatenation (safe for fan-in from parallel branches).
 # _merge_dict → last-write-wins for the agent_results / context dicts.
+
 
 def _merge_dict(left: dict, right: dict) -> dict:
     """Reducer: merge two dicts, right values override left on key collision."""
@@ -126,23 +126,23 @@ class GraphState(TypedDict, total=False):
     # ------------------------------------------------------------------
     # Risk & Report outputs — set sequentially after fan-in
     # ------------------------------------------------------------------
-    risk_result: Optional[dict[str, Any]]
-    report: Optional[dict[str, Any]]
+    risk_result: dict[str, Any] | None
+    report: dict[str, Any] | None
 
     # ------------------------------------------------------------------
     # Pipeline-level metadata
     # ------------------------------------------------------------------
-    pipeline_status: str                    # PipelineStatus value
-    error: Optional[str]                    # last fatal error message
-    errors: Annotated[list[str], _merge_errors]   # all non-fatal errors
+    pipeline_status: str  # PipelineStatus value
+    error: str | None  # last fatal error message
+    errors: Annotated[list[str], _merge_errors]  # all non-fatal errors
 
     # Timing
-    started_at: Optional[str]              # ISO-8601
-    completed_at: Optional[str]            # ISO-8601
+    started_at: str | None  # ISO-8601
+    completed_at: str | None  # ISO-8601
 
     # OpenTelemetry trace propagation
-    trace_id: Optional[str]
-    otel_context: Optional[dict[str, str]]
+    trace_id: str | None
+    otel_context: dict[str, str] | None
 
     # Retry bookkeeping (orchestrator-managed)
     retry_counts: Annotated[dict[str, int], _merge_dict]
@@ -160,8 +160,8 @@ def initial_state(
     job_id: str,
     apk_sha256: str,
     evidence: dict[str, Any],
-    config_overrides: Optional[dict[str, Any]] = None,
-    trace_id: Optional[str] = None,
+    config_overrides: dict[str, Any] | None = None,
+    trace_id: str | None = None,
 ) -> GraphState:
     """
     Construct a fully-initialised GraphState for a new job.
@@ -209,7 +209,7 @@ def is_terminal(state: GraphState) -> bool:
     )
 
 
-def get_agent_result(state: GraphState, agent_name: str) -> Optional[AgentResultEntry]:
+def get_agent_result(state: GraphState, agent_name: str) -> AgentResultEntry | None:
     """Safely retrieve a single agent's result from state."""
     return state.get("agent_results", {}).get(agent_name)
 
@@ -234,7 +234,4 @@ def all_analysis_agents_done(state: GraphState) -> bool:
         "threat_intel_agent",
     }
     results = state.get("agent_results", {})
-    return all(
-        results.get(name, {}).get("status") in terminal_statuses
-        for name in analysis_agents
-    )
+    return all(results.get(name, {}).get("status") in terminal_statuses for name in analysis_agents)

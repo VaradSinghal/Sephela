@@ -17,10 +17,8 @@ try:
 except ImportError:
     pytest.skip("schemathesis not installed", allow_module_level=True)
 
-from starlette.testclient import TestClient
 
 from app.main import app
-
 
 # Generate a schema from the live FastAPI app instance.
 schema = schemathesis.from_asgi("/api/v1/openapi.json", app=app)

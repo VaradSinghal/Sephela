@@ -12,8 +12,6 @@ synergy rules, category classification, and tier assignment.
 
 from __future__ import annotations
 
-import pytest
-
 from ai.scoring.engine import RiskScoringEngine
 from ai.scoring.models import RiskTierEnum
 
@@ -65,9 +63,14 @@ ADWARE_PROFILE = {
         _f("permission_risk", "medium", "high", title="ACCESS_FINE_LOCATION", owasp=["M1"]),
         _f("api_usage", "medium", "medium", title="Location API usage", owasp=["M1"]),
         _f("api_usage", "low", "medium", title="Advertising ID access"),
-        _f("network", "medium", "high",
-           title="Connects to ad networks",
-           mitre=["T1071"], owasp=["M3"]),
+        _f(
+            "network",
+            "medium",
+            "high",
+            title="Connects to ad networks",
+            mitre=["T1071"],
+            owasp=["M3"],
+        ),
         _f("cleartext", "low", "high", title="Some cleartext ad traffic"),
         _f("exported_component", "low", "medium", title="Exported ad receiver"),
     ],
@@ -114,26 +117,33 @@ SPYWARE_PROFILE = {
         _f("permission_risk", "high", "very_high", title="ACCESS_FINE_LOCATION"),
         _f("permission_risk", "high", "high", title="READ_CONTACTS"),
         _f("permission_risk", "high", "high", title="READ_SMS"),
-        _f("api_usage", "high", "high",
-           title="Location tracking API",
-           mitre=["T1430"], owasp=["M1"]),
-        _f("api_usage", "high", "high",
-           title="Audio recording API",
-           mitre=["T1429"]),
-        _f("api_usage", "critical", "very_high",
-           title="SMS collection and exfiltration",
-           mitre=["T1636.004", "T1041"]),
-        _f("data_exfil", "critical", "very_high",
-           title="Exfiltrates contacts over network",
-           mitre=["T1636.003", "T1041"], owasp=["M2"]),
-        _f("c2", "high", "high",
-           title="C2 communication channel",
-           mitre=["T1071", "T1573"]),
-        _f("obfuscation", "high", "very_high",
-           title="Code obfuscation detected",
-           mitre=["T1027"]),
-        _f("anti_analysis", "medium", "high",
-           title="Anti-emulator checks"),
+        _f(
+            "api_usage",
+            "high",
+            "high",
+            title="Location tracking API",
+            mitre=["T1430"],
+            owasp=["M1"],
+        ),
+        _f("api_usage", "high", "high", title="Audio recording API", mitre=["T1429"]),
+        _f(
+            "api_usage",
+            "critical",
+            "very_high",
+            title="SMS collection and exfiltration",
+            mitre=["T1636.004", "T1041"],
+        ),
+        _f(
+            "data_exfil",
+            "critical",
+            "very_high",
+            title="Exfiltrates contacts over network",
+            mitre=["T1636.003", "T1041"],
+            owasp=["M2"],
+        ),
+        _f("c2", "high", "high", title="C2 communication channel", mitre=["T1071", "T1573"]),
+        _f("obfuscation", "high", "very_high", title="Code obfuscation detected", mitre=["T1027"]),
+        _f("anti_analysis", "medium", "high", title="Anti-emulator checks"),
     ],
     "permissions": [
         "android.permission.CAMERA",
@@ -154,56 +164,72 @@ BANKING_TROJAN_PROFILE = {
     "name": "Banking Trojan (Anubis-like)",
     "findings": [
         # Overlay attack
-        _f("api_usage", "critical", "very_high",
-           title="SYSTEM_ALERT_WINDOW overlay",
-           mitre=["T1417.002"], owasp=["M1"]),
+        _f(
+            "api_usage",
+            "critical",
+            "very_high",
+            title="SYSTEM_ALERT_WINDOW overlay",
+            mitre=["T1417.002"],
+            owasp=["M1"],
+        ),
         # Accessibility abuse
-        _f("api_usage", "critical", "very_high",
-           title="AccessibilityService abuse",
-           mitre=["T1417.001"], owasp=["M1"]),
+        _f(
+            "api_usage",
+            "critical",
+            "very_high",
+            title="AccessibilityService abuse",
+            mitre=["T1417.001"],
+            owasp=["M1"],
+        ),
         # SMS interception
-        _f("api_usage", "critical", "very_high",
-           title="SMS interception via SmsManager",
-           mitre=["T1636.004"], owasp=["M1"]),
+        _f(
+            "api_usage",
+            "critical",
+            "very_high",
+            title="SMS interception via SmsManager",
+            mitre=["T1636.004"],
+            owasp=["M1"],
+        ),
         # Device admin
-        _f("api_usage", "critical", "very_high",
-           title="DeviceAdminReceiver registered",
-           mitre=["T1626"]),
+        _f(
+            "api_usage",
+            "critical",
+            "very_high",
+            title="DeviceAdminReceiver registered",
+            mitre=["T1626"],
+        ),
         # Reflection + dynamic loading
-        _f("reflection", "high", "high",
-           title="Reflection-based dynamic dispatch",
-           mitre=["T1620"]),
-        _f("api_usage", "high", "high",
-           title="DexClassLoader dynamic loading",
-           mitre=["T1407"]),
+        _f(
+            "reflection", "high", "high", title="Reflection-based dynamic dispatch", mitre=["T1620"]
+        ),
+        _f("api_usage", "high", "high", title="DexClassLoader dynamic loading", mitre=["T1407"]),
         # Network / C2
-        _f("c2", "critical", "very_high",
-           title="C2 communication to suspicious domain",
-           mitre=["T1071", "T1573"]),
-        _f("data_exfil", "high", "high",
-           title="Exfiltrates SMS + contacts",
-           mitre=["T1636.003", "T1041"]),
+        _f(
+            "c2",
+            "critical",
+            "very_high",
+            title="C2 communication to suspicious domain",
+            mitre=["T1071", "T1573"],
+        ),
+        _f(
+            "data_exfil",
+            "high",
+            "high",
+            title="Exfiltrates SMS + contacts",
+            mitre=["T1636.003", "T1041"],
+        ),
         # Code evasion
-        _f("obfuscation", "high", "very_high",
-           title="Heavy code obfuscation",
-           mitre=["T1027"]),
-        _f("anti_analysis", "high", "high",
-           title="Root/emulator detection"),
-        _f("control_flow", "high", "high",
-           title="Reflection chain: forName→getMethod→invoke"),
-        _f("native_code", "medium", "high",
-           title="Native library with encrypted strings"),
+        _f("obfuscation", "high", "very_high", title="Heavy code obfuscation", mitre=["T1027"]),
+        _f("anti_analysis", "high", "high", title="Root/emulator detection"),
+        _f("control_flow", "high", "high", title="Reflection chain: forName→getMethod→invoke"),
+        _f("native_code", "medium", "high", title="Native library with encrypted strings"),
         # Permissions
-        _f("permission_risk", "critical", "very_high",
-           title="Critical permission profile"),
+        _f("permission_risk", "critical", "very_high", title="Critical permission profile"),
         # Manifest
-        _f("exported_component", "high", "high",
-           title="Multiple exported components"),
+        _f("exported_component", "high", "high", title="Multiple exported components"),
         # Threat intel
-        _f("ioc_match", "critical", "very_high",
-           title="Hash matches known Anubis sample"),
-        _f("family_attribution", "critical", "very_high",
-           title="Attributed to Anubis family"),
+        _f("ioc_match", "critical", "very_high", title="Hash matches known Anubis sample"),
+        _f("family_attribution", "critical", "very_high", title="Attributed to Anubis family"),
     ],
     "permissions": [
         "android.permission.RECEIVE_SMS",
@@ -228,26 +254,20 @@ BANKING_TROJAN_PROFILE = {
 DROPPER_PROFILE = {
     "name": "Dropper (Stage 1 Loader)",
     "findings": [
-        _f("api_usage", "critical", "very_high",
-           title="DexClassLoader usage",
-           mitre=["T1407"]),
-        _f("reflection", "high", "high",
-           title="Reflective code loading",
-           mitre=["T1620"]),
-        _f("network", "high", "high",
-           title="Downloads payload from CDN",
-           mitre=["T1071"]),
-        _f("obfuscation", "high", "very_high",
-           title="Heavy obfuscation to hide loader",
-           mitre=["T1027"]),
-        _f("anti_analysis", "high", "high",
-           title="Sandbox evasion checks"),
-        _f("native_code", "medium", "high",
-           title="Native unpacking routine"),
-        _f("control_flow", "high", "high",
-           title="Encrypted string decryption chain"),
-        _f("permission_risk", "medium", "high",
-           title="Broad permissions for loader"),
+        _f("api_usage", "critical", "very_high", title="DexClassLoader usage", mitre=["T1407"]),
+        _f("reflection", "high", "high", title="Reflective code loading", mitre=["T1620"]),
+        _f("network", "high", "high", title="Downloads payload from CDN", mitre=["T1071"]),
+        _f(
+            "obfuscation",
+            "high",
+            "very_high",
+            title="Heavy obfuscation to hide loader",
+            mitre=["T1027"],
+        ),
+        _f("anti_analysis", "high", "high", title="Sandbox evasion checks"),
+        _f("native_code", "medium", "high", title="Native unpacking routine"),
+        _f("control_flow", "high", "high", title="Encrypted string decryption chain"),
+        _f("permission_risk", "medium", "high", title="Broad permissions for loader"),
     ],
     "permissions": [
         "android.permission.INTERNET",
@@ -264,8 +284,7 @@ DROPPER_PROFILE = {
 SINGLE_IOC_PROFILE = {
     "name": "Edge Case — Single IOC Match Only",
     "findings": [
-        _f("ioc_match", "critical", "very_high",
-           title="SHA-256 matches known Cerberus hash"),
+        _f("ioc_match", "critical", "very_high", title="SHA-256 matches known Cerberus hash"),
     ],
     "permissions": [],
     "agent_outputs": {
@@ -281,10 +300,7 @@ SINGLE_IOC_PROFILE = {
 # =====================================================================
 MANY_LOW_FINDINGS_PROFILE = {
     "name": "Edge Case — 50 Info Findings",
-    "findings": [
-        _f("api_usage", "info", "low", title=f"Info finding {i}")
-        for i in range(50)
-    ],
+    "findings": [_f("api_usage", "info", "low", title=f"Info finding {i}") for i in range(50)],
     "permissions": [],
     "agent_outputs": {},
 }
@@ -293,6 +309,7 @@ MANY_LOW_FINDINGS_PROFILE = {
 # =====================================================================
 # Tests
 # =====================================================================
+
 
 class TestBenignProfile:
     def test_score_below_20(self) -> None:

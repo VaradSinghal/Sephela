@@ -57,9 +57,7 @@ class SearchFilter:
             return False
         if self.mitre and not _overlaps(self.mitre, chunk.mitre):
             return False
-        if self.tags and not _overlaps(self.tags, chunk.tags):
-            return False
-        return True
+        return not (self.tags and not _overlaps(self.tags, chunk.tags))
 
 
 def _overlaps(wanted: list[str], present: list[str]) -> bool:
@@ -107,9 +105,7 @@ class InMemoryVectorStore(VectorStore):
 
     async def upsert(self, chunks: list[Chunk], vectors: list[list[float]]) -> int:
         if len(chunks) != len(vectors):
-            raise VectorStoreError(
-                f"upsert got {len(chunks)} chunks and {len(vectors)} vectors"
-            )
+            raise VectorStoreError(f"upsert got {len(chunks)} chunks and {len(vectors)} vectors")
         for chunk, vector in zip(chunks, vectors, strict=True):
             # Rejecting here rather than relying on the ingestor is the storage
             # half of the trusted-source rule: nothing untrusted can be persisted

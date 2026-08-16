@@ -114,9 +114,7 @@ async def _run(job_id: str) -> str:
             await stage.begin()
             return (await stage.fail(exc)).status.value
 
-        stage = StageRunner(
-            session, jid, engine_name=ENGINE_NAME, engine_version=engine_version
-        )
+        stage = StageRunner(session, jid, engine_name=ENGINE_NAME, engine_version=engine_version)
 
         workdir = job_artifacts_dir(jid)
         artifacts_dir = workdir / "artifacts"
@@ -178,9 +176,7 @@ async def _execute(
 
     # Parsing is pure data handling, but artifacts are untrusted input.
     try:
-        envelope = await asyncio.to_thread(
-            engine.analyze, artifacts_dir, job_id=job_id
-        )
+        envelope = await asyncio.to_thread(engine.analyze, artifacts_dir, job_id=job_id)
     except Exception as exc:  # noqa: BLE001
         logger.exception("dynamic_engine_error", job_id=job_id)
         return await stage.fail(exc)

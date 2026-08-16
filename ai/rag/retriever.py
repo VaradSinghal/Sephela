@@ -77,9 +77,7 @@ class KnowledgeRetriever:
         result.chunks = self._select(candidates, query, result)
         return result
 
-    async def _search(
-        self, query: RetrievalQuery, vector: list[float]
-    ) -> list[ScoredChunk]:
+    async def _search(self, query: RetrievalQuery, vector: list[float]) -> list[ScoredChunk]:
         """Run the search pass(es) and merge, keeping each chunk's best score."""
         fetch = max(query.top_k * OVERFETCH, query.top_k)
 

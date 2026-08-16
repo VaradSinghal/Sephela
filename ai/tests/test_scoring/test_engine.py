@@ -51,9 +51,11 @@ class TestEngineBasics:
     def test_single_critical_finding(self) -> None:
         """A single critical finding with very_high confidence."""
         engine = RiskScoringEngine()
-        result = engine.score([
-            _finding(severity="critical", confidence="very_high"),
-        ])
+        result = engine.score(
+            [
+                _finding(severity="critical", confidence="very_high"),
+            ]
+        )
         # critical=100 × very_high=1.0 = 100 raw, ×0.15 (api weight) = 15.0
         assert result.final_score == 15.0
         assert result.tier == RiskTierEnum.benign  # still below 40
@@ -91,25 +93,31 @@ class TestDomainScoring:
     def test_findings_grouped_correctly(self) -> None:
         """Different finding types route to the correct domains."""
         engine = RiskScoringEngine()
-        result = engine.score([
-            _finding("debuggable", "medium", "high"),        # manifest
-            _finding("permission_risk", "high", "high"),     # permissions
-            _finding("control_flow", "critical", "high"),    # code
-            _finding("api_usage", "high", "medium"),         # api
-            _finding("c2", "critical", "very_high"),         # network
-            _finding("ioc_match", "high", "high"),           # threat_intel
-        ])
+        result = engine.score(
+            [
+                _finding("debuggable", "medium", "high"),  # manifest
+                _finding("permission_risk", "high", "high"),  # permissions
+                _finding("control_flow", "critical", "high"),  # code
+                _finding("api_usage", "high", "medium"),  # api
+                _finding("c2", "critical", "very_high"),  # network
+                _finding("ioc_match", "high", "high"),  # threat_intel
+            ]
+        )
         domain_names = {ds.domain for ds in result.domain_scores if ds.finding_count > 0}
-        assert {"manifest", "permissions", "code", "api", "network", "threat_intel"}.issubset(domain_names)
+        assert {"manifest", "permissions", "code", "api", "network", "threat_intel"}.issubset(
+            domain_names
+        )
 
     def test_max_scoring_within_domain(self) -> None:
         """Domain score uses max finding, not average."""
         engine = RiskScoringEngine()
         # Two api findings: info and critical
-        result = engine.score([
-            _finding("api_usage", "info", "low"),       # 10 × 0.30 = 3.0
-            _finding("api_usage", "critical", "high"),  # 100 × 0.85 = 85.0
-        ])
+        result = engine.score(
+            [
+                _finding("api_usage", "info", "low"),  # 10 × 0.30 = 3.0
+                _finding("api_usage", "critical", "high"),  # 100 × 0.85 = 85.0
+            ]
+        )
         api_domain = next(ds for ds in result.domain_scores if ds.domain == "api")
         assert api_domain.raw_score == 85.0  # max, not average
 
@@ -136,8 +144,8 @@ class TestTierClassification:
         # Build up enough findings across domains to hit ~50
         findings = [
             _finding("control_flow", "critical", "very_high"),  # code: 100 × 0.20 = 20
-            _finding("api_usage", "critical", "very_high"),     # api: 100 × 0.15 = 15
-            _finding("c2", "high", "high"),                      # network: 63.75 × 0.15 = 9.56
+            _finding("api_usage", "critical", "very_high"),  # api: 100 × 0.15 = 15
+            _finding("c2", "high", "high"),  # network: 63.75 × 0.15 = 9.56
         ]
         result = engine.score(findings)
         assert 40.0 <= result.final_score < 70.0
@@ -170,21 +178,25 @@ class TestConfidence:
 
     def test_high_severity_boosts_confidence(self) -> None:
         engine = RiskScoringEngine()
-        result = engine.score([
-            _finding("api_usage", "critical", "very_high"),
-            _finding("c2", "high", "high"),
-        ])
+        result = engine.score(
+            [
+                _finding("api_usage", "critical", "very_high"),
+                _finding("c2", "high", "high"),
+            ]
+        )
         assert result.confidence > 0.5
 
     def test_multi_domain_boosts_confidence(self) -> None:
         """Findings across many domains increase confidence."""
         engine = RiskScoringEngine()
-        result = engine.score([
-            _finding("debuggable", "medium", "high"),
-            _finding("permission_risk", "medium", "high"),
-            _finding("api_usage", "medium", "high"),
-            _finding("c2", "medium", "high"),
-        ])
+        result = engine.score(
+            [
+                _finding("debuggable", "medium", "high"),
+                _finding("permission_risk", "medium", "high"),
+                _finding("api_usage", "medium", "high"),
+                _finding("c2", "medium", "high"),
+            ]
+        )
         single = engine.score([_finding("api_usage", "medium", "high")])
         assert result.confidence > single.confidence
 
@@ -194,16 +206,20 @@ class TestKeyFindings:
 
     def test_key_findings_ordered_by_severity(self) -> None:
         engine = RiskScoringEngine()
-        result = engine.score([
-            _finding("api_usage", "info", "low", title="Low prio"),
-            _finding("c2", "critical", "very_high", title="Critical C2"),
-            _finding("debuggable", "medium", "high", title="Medium debuggable"),
-        ])
+        result = engine.score(
+            [
+                _finding("api_usage", "info", "low", title="Low prio"),
+                _finding("c2", "critical", "very_high", title="Critical C2"),
+                _finding("debuggable", "medium", "high", title="Medium debuggable"),
+            ]
+        )
         assert result.key_findings[0].startswith("[CRITICAL]")
         assert result.key_findings[-1].startswith("[INFO]")
 
     def test_key_findings_capped_at_ten(self) -> None:
         engine = RiskScoringEngine()
-        findings = [_finding("api_usage", "medium", "high", title=f"Finding {i}") for i in range(20)]
+        findings = [
+            _finding("api_usage", "medium", "high", title=f"Finding {i}") for i in range(20)
+        ]
         result = engine.score(findings)
         assert len(result.key_findings) <= 10

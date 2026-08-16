@@ -13,6 +13,7 @@ Revision ID: 0003_enrichments
 Revises: 0002_evidence_findings
 Create Date: 2026-08-09
 """
+
 from __future__ import annotations
 
 from collections.abc import Sequence

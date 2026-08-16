@@ -27,9 +27,7 @@ def fleet(monkeypatch):
     def _install(behaviours: dict[str, str] | None = None) -> StubFleet:
         f = StubFleet(behaviours)
         for agent_name, class_name in _CLASS_BY_AGENT.items():
-            monkeypatch.setattr(
-                f"ai.orchestration.workflow.{class_name}", f.factory(agent_name)
-            )
+            monkeypatch.setattr(f"ai.orchestration.workflow.{class_name}", f.factory(agent_name))
         return f
 
     return _install

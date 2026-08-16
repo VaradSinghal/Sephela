@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-import asyncio
 import json
 import time
-from typing import Any, AsyncIterator, Dict, List, Optional
+from collections.abc import AsyncIterator
+from typing import Any
 
 import httpx
 
-from ai.llm.client import LLMClient, LLMConfig, LLMResponse, StreamingChunk, ModelProvider
+from ai.llm.client import LLMClient, LLMConfig, LLMResponse, ModelProvider, StreamingChunk
 
 
 class OpenRouterClient(LLMClient):
@@ -19,7 +19,7 @@ class OpenRouterClient(LLMClient):
         super().__init__(config)
         self.config.provider = ModelProvider.OPENROUTER
         self.base_url = config.base_url or "https://openrouter.ai/api/v1"
-        self._client: Optional[httpx.AsyncClient] = None
+        self._client: httpx.AsyncClient | None = None
 
     async def initialize(self) -> None:
         """Initialize HTTP client."""
@@ -49,7 +49,7 @@ class OpenRouterClient(LLMClient):
         }
 
         start_time = time.time()
-        
+
         async def _request():
             response = await self._client.post("/chat/completions", json=payload)
             response.raise_for_status()
@@ -89,7 +89,7 @@ class OpenRouterClient(LLMClient):
         async with self._client.stream("POST", "/chat/completions", json=payload) as response:
             response.raise_for_status()
             tokens = 0
-            
+
             async for line in response.aiter_lines():
                 if line.startswith("data: "):
                     data_str = line[6:]
@@ -100,7 +100,7 @@ class OpenRouterClient(LLMClient):
                         delta = data["choices"][0]["delta"]
                         content = delta.get("content", "")
                         finish_reason = data["choices"][0].get("finish_reason")
-                        
+
                         if content:
                             tokens += len(content) // 4
                             yield StreamingChunk(
@@ -153,7 +153,7 @@ class OpenRouterModelRegistry:
         return models[0]
 
     @classmethod
-    async def fetch_available_models(cls, api_key: str) -> List[Dict[str, Any]]:
+    async def fetch_available_models(cls, api_key: str) -> list[dict[str, Any]]:
         """Fetch currently available models from OpenRouter API."""
         async with httpx.AsyncClient() as client:
             response = await client.get(

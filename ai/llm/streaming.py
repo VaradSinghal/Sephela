@@ -2,25 +2,27 @@
 
 from __future__ import annotations
 
-import asyncio
+import contextlib
 import json
-from typing import Any, AsyncIterator, Callable, Dict, List, Optional
+from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass, field
 from datetime import datetime
+from typing import Any
 
-from ai.llm.client import StreamingChunk, LLMResponse
+from ai.llm.client import LLMResponse, StreamingChunk
 
 
 @dataclass
 class StreamingState:
     """State of a streaming response."""
-    chunks: List[StreamingChunk] = field(default_factory=list)
+
+    chunks: list[StreamingChunk] = field(default_factory=list)
     full_content: str = ""
     total_tokens: int = 0
     started_at: datetime = field(default_factory=datetime.utcnow)
-    completed_at: Optional[datetime] = None
+    completed_at: datetime | None = None
     is_complete: bool = False
-    error: Optional[str] = None
+    error: str | None = None
 
 
 class StreamingHandler:
@@ -28,9 +30,9 @@ class StreamingHandler:
 
     def __init__(
         self,
-        on_chunk: Optional[Callable[[StreamingChunk], None]] = None,
-        on_complete: Optional[Callable[[LLMResponse], None]] = None,
-        on_error: Optional[Callable[[Exception], None]] = None,
+        on_chunk: Callable[[StreamingChunk], None] | None = None,
+        on_complete: Callable[[LLMResponse], None] | None = None,
+        on_error: Callable[[Exception], None] | None = None,
         buffer_size: int = 1024,
     ):
         self.on_chunk = on_chunk
@@ -53,11 +55,10 @@ class StreamingHandler:
                 self.state.total_tokens = chunk.tokens_so_far
 
                 if self.on_chunk:
-                    try:
+                    # A misbehaving consumer callback must not kill the stream
+                    # mid-response — the tokens already received are still valid.
+                    with contextlib.suppress(Exception):
                         self.on_chunk(chunk)
-                    except Exception as e:
-                        # Don't let callback errors break the stream
-                        pass
 
                 if chunk.is_final:
                     break
@@ -78,20 +79,16 @@ class StreamingHandler:
             )
 
             if self.on_complete:
-                try:
+                with contextlib.suppress(Exception):
                     self.on_complete(response)
-                except Exception:
-                    pass
 
             return response
 
         except Exception as e:
             self.state.error = str(e)
             if self.on_error:
-                try:
+                with contextlib.suppress(Exception):
                     self.on_error(e)
-                except Exception:
-                    pass
             raise
 
     def get_partial_content(self) -> str:
@@ -106,14 +103,14 @@ class StreamingHandler:
 class JSONStreamingParser:
     """Parses streaming JSON output, handling partial chunks."""
 
-    def __init__(self, target_schema: Optional[type] = None):
+    def __init__(self, target_schema: type | None = None):
         self.target_schema = target_schema
         self.buffer = ""
         self.depth = 0
         self.in_string = False
         self.escape_next = False
 
-    def feed(self, chunk: str) -> List[Dict[str, Any]]:
+    def feed(self, chunk: str) -> list[dict[str, Any]]:
         """Feed a chunk and return any complete JSON objects."""
         self.buffer += chunk
         results = []
@@ -135,11 +132,11 @@ class JSONStreamingParser:
                     self.depth -= 1
                     if self.depth == 0:
                         # Potential complete object
-                        obj_str = self.buffer[:i+1]
+                        obj_str = self.buffer[: i + 1]
                         try:
                             obj = json.loads(obj_str)
                             results.append(obj)
-                            self.buffer = self.buffer[i+1:]
+                            self.buffer = self.buffer[i + 1 :]
                             i = -1  # Will be incremented to 0
                         except json.JSONDecodeError:
                             pass
@@ -148,7 +145,7 @@ class JSONStreamingParser:
 
         return results
 
-    def get_partial(self) -> Optional[Dict[str, Any]]:
+    def get_partial(self) -> dict[str, Any] | None:
         """Try to parse current buffer as partial JSON."""
         try:
             return json.loads(self.buffer)
@@ -162,9 +159,9 @@ class StructuredStreamingHandler(StreamingHandler):
     def __init__(
         self,
         schema_class: type,
-        on_chunk: Optional[Callable[[StreamingChunk], None]] = None,
-        on_complete: Optional[Callable[[Any], None]] = None,
-        on_error: Optional[Callable[[Exception], None]] = None,
+        on_chunk: Callable[[StreamingChunk], None] | None = None,
+        on_complete: Callable[[Any], None] | None = None,
+        on_error: Callable[[Exception], None] | None = None,
         buffer_size: int = 1024,
     ):
         super().__init__(on_chunk, on_error=on_error, buffer_size=buffer_size)
@@ -188,10 +185,8 @@ class StructuredStreamingHandler(StreamingHandler):
                 self.state.total_tokens = chunk.tokens_so_far
 
                 if self.on_chunk:
-                    try:
+                    with contextlib.suppress(Exception):
                         self.on_chunk(chunk)
-                    except Exception:
-                        pass
 
                 # Try to parse JSON objects from chunk
                 objects = self.json_parser.feed(chunk.content)
@@ -224,7 +219,7 @@ class StructuredStreamingHandler(StreamingHandler):
                 else:
                     raise ValueError("No valid JSON parsed from stream")
 
-            response = LLMResponse(
+            LLMResponse(
                 content=self.state.full_content,
                 model="",
                 provider=None,
@@ -233,22 +228,22 @@ class StructuredStreamingHandler(StreamingHandler):
                     (self.state.completed_at - self.state.started_at).total_seconds() * 1000
                 ),
                 finish_reason="stop",
-                raw_response={"parsed": validated.model_dump() if hasattr(validated, 'model_dump') else str(validated)},
+                raw_response={
+                    "parsed": validated.model_dump()
+                    if hasattr(validated, "model_dump")
+                    else str(validated)
+                },
             )
 
             if self._on_complete:
-                try:
+                with contextlib.suppress(Exception):
                     self._on_complete(validated)
-                except Exception:
-                    pass
 
             return validated
 
         except Exception as e:
             self.state.error = str(e)
             if self.on_error:
-                try:
+                with contextlib.suppress(Exception):
                     self.on_error(e)
-                except Exception:
-                    pass
             raise

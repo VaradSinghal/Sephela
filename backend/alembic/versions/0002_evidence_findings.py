@@ -10,6 +10,7 @@ Revision ID: 0002_evidence_findings
 Revises: 0001_initial
 Create Date: 2026-08-02
 """
+
 from __future__ import annotations
 
 from collections.abc import Sequence

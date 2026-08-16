@@ -4,17 +4,19 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any, Callable, TypeVar, Optional
-from dataclasses import dataclass, field
+from collections.abc import Callable
+from dataclasses import dataclass
 from enum import Enum
+from typing import Any, TypeVar
 
 logger = logging.getLogger(__name__)
 
-T = TypeVar('T')
+T = TypeVar("T")
 
 
 class RetryStrategy(str, Enum):
     """Retry strategy types."""
+
     EXPONENTIAL = "exponential"
     LINEAR = "linear"
     CONSTANT = "constant"
@@ -24,6 +26,7 @@ class RetryStrategy(str, Enum):
 @dataclass
 class RetryConfig:
     """Configuration for retry behavior."""
+
     max_attempts: int = 3
     base_delay: float = 1.0
     max_delay: float = 60.0
@@ -34,24 +37,25 @@ class RetryConfig:
         Exception,  # Base - will be filtered
     )
     non_retryable_exceptions: tuple = ()
-    on_retry: Optional[Callable[[Exception, int], None]] = None
+    on_retry: Callable[[Exception, int], None] | None = None
 
 
 @dataclass
 class RetryResult:
     """Result of a retry operation."""
+
     success: bool
     result: Any = None
-    error: Optional[Exception] = None
+    error: Exception | None = None
     attempts: int = 0
     total_delay: float = 0.0
-    last_exception: Optional[Exception] = None
+    last_exception: Exception | None = None
 
 
 class RetryHandler:
     """Handles retries with configurable strategies."""
 
-    def __init__(self, config: Optional[RetryConfig] = None):
+    def __init__(self, config: RetryConfig | None = None):
         self.config = config or RetryConfig()
 
     async def execute(self, func: Callable[..., T], *args, **kwargs) -> RetryResult:
@@ -90,9 +94,7 @@ class RetryHandler:
                     delay = self._calculate_delay(attempt)
                     total_delay += delay
 
-                    logger.warning(
-                        f"Attempt {attempt + 1} failed: {e}. Retrying in {delay:.2f}s"
-                    )
+                    logger.warning(f"Attempt {attempt + 1} failed: {e}. Retrying in {delay:.2f}s")
 
                     if self.config.on_retry:
                         self.config.on_retry(e, attempt + 1)
@@ -114,7 +116,7 @@ class RetryHandler:
         import random
 
         if self.config.strategy == RetryStrategy.EXPONENTIAL:
-            delay = self.config.base_delay * (2 ** attempt)
+            delay = self.config.base_delay * (2**attempt)
         elif self.config.strategy == RetryStrategy.LINEAR:
             delay = self.config.base_delay * (attempt + 1)
         elif self.config.strategy == RetryStrategy.CONSTANT:
@@ -144,8 +146,9 @@ class RetryHandler:
         return a
 
 
-def with_retry(config: Optional[RetryConfig] = None):
+def with_retry(config: RetryConfig | None = None):
     """Decorator for adding retry logic to functions."""
+
     def decorator(func: Callable[..., T]) -> Callable[..., T]:
         handler = RetryHandler(config)
 
@@ -187,8 +190,11 @@ class CircuitBreaker:
     async def call(self, func: Callable[..., T], *args, **kwargs) -> T:
         """Execute function with circuit breaker."""
         if self.state == "open":
-            if self.last_failure_time and \
-               (asyncio.get_event_loop().time() - self.last_failure_time) > self.recovery_timeout:
+            if (
+                self.last_failure_time
+                and (asyncio.get_event_loop().time() - self.last_failure_time)
+                > self.recovery_timeout
+            ):
                 self.state = "half-open"
                 logger.info("Circuit breaker entering half-open state")
             else:
@@ -207,7 +213,7 @@ class CircuitBreaker:
 
             return result
 
-        except self.expected_exception as e:
+        except self.expected_exception:
             self.failure_count += 1
             self.last_failure_time = asyncio.get_event_loop().time()
 

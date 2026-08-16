@@ -17,6 +17,7 @@ from typing import Any
 
 from sqlalchemy import (
     BigInteger,
+    DateTime,
     Enum,
     Float,
     ForeignKey,
@@ -26,7 +27,6 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     func,
-    DateTime,
 )
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.dialects.postgresql import UUID as PGUUID

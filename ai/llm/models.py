@@ -8,6 +8,7 @@ from enum import Enum
 
 class ModelProvider(str, Enum):
     """Supported LLM providers."""
+
     ANTHROPIC = "anthropic"
     OPENAI = "openai"
     OPENROUTER = "openrouter"
@@ -16,6 +17,7 @@ class ModelProvider(str, Enum):
 
 class ModelCapability(str, Enum):
     """Model capabilities."""
+
     TEXT = "text"
     VISION = "vision"
     FUNCTION_CALLING = "function_calling"
@@ -28,6 +30,7 @@ class ModelCapability(str, Enum):
 @dataclass
 class ModelInfo:
     """Information about a specific model."""
+
     id: str
     name: str
     provider: ModelProvider
@@ -100,7 +103,6 @@ MODEL_REGISTRY: dict[str, ModelInfo] = {
         cost_per_1k_output=0.005,
         description="Fast, cheap model for triage and high-volume classification",
     ),
-
     # OpenAI
     "gpt-4o": ModelInfo(
         id="gpt-4o",
@@ -139,7 +141,6 @@ MODEL_REGISTRY: dict[str, ModelInfo] = {
         cost_per_1k_output=0.0006,
         description="Cost-effective small model",
     ),
-
     # OpenRouter (models accessed via OpenRouter)
     # OpenRouter prefixes the upstream id with the vendor slug. Its catalogue lags
     # first-party releases, so confirm the slug at
@@ -241,12 +242,12 @@ def get_model_info(model_id: str) -> ModelInfo | None:
 def get_recommended_model(task: str, provider: ModelProvider | None = None) -> str:
     """Get recommended model for a task."""
     models = TASK_MODEL_MAP.get(task, TASK_MODEL_MAP["manifest_analysis"])
-    
+
     if provider:
         for model_id in models:
             if MODEL_REGISTRY[model_id].provider == provider:
                 return model_id
-    
+
     return models[0]
 
 
@@ -256,13 +257,13 @@ def list_models(
 ) -> list[ModelInfo]:
     """List models with optional filters."""
     models = list(MODEL_REGISTRY.values())
-    
+
     if provider:
         models = [m for m in models if m.provider == provider]
-    
+
     if capability:
         models = [m for m in models if capability in m.capabilities]
-    
+
     return sorted(models, key=lambda m: m.cost_per_1k_input)
 
 
@@ -271,7 +272,7 @@ def estimate_cost(model_id: str, input_tokens: int, output_tokens: int) -> float
     info = MODEL_REGISTRY.get(model_id)
     if not info:
         return 0.0
-    
+
     input_cost = (input_tokens / 1000) * info.cost_per_1k_input
     output_cost = (output_tokens / 1000) * info.cost_per_1k_output
     return input_cost + output_cost

@@ -17,18 +17,19 @@ Rules are evaluated after base domain scoring, using the same findings.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 
 @dataclass(frozen=True)
 class SynergyRule:
     """A compound threat pattern that amplifies the risk score."""
+
     rule_id: str
     name: str
     description: str
     required_signals: frozenset[str]  # conditions that must all match
-    bonus: float                      # additive points
-    confidence: float = 0.80          # how reliable this pattern is
+    bonus: float  # additive points
+    confidence: float = 0.80  # how reliable this pattern is
 
 
 # ---------------------------------------------------------------------------
@@ -46,10 +47,12 @@ SYNERGY_RULES: list[SynergyRule] = [
             "Classic banking trojan pattern: draw overlay to steal credentials "
             "while intercepting SMS for OTP bypass."
         ),
-        required_signals=frozenset({
-            "mitre:T1417.002",   # GUI Input Capture (overlay)
-            "mitre:T1636.004",   # SMS/MMS Collection
-        }),
+        required_signals=frozenset(
+            {
+                "mitre:T1417.002",  # GUI Input Capture (overlay)
+                "mitre:T1636.004",  # SMS/MMS Collection
+            }
+        ),
         bonus=15.0,
         confidence=0.95,
     ),
@@ -60,11 +63,13 @@ SYNERGY_RULES: list[SynergyRule] = [
             "Full takeover pattern: accessibility service for keylogging, "
             "overlay for credential theft, device admin for persistence."
         ),
-        required_signals=frozenset({
-            "mitre:T1417.001",   # Keylogging (accessibility)
-            "mitre:T1417.002",   # Overlay
-            "mitre:T1626",       # Device admin abuse
-        }),
+        required_signals=frozenset(
+            {
+                "mitre:T1417.001",  # Keylogging (accessibility)
+                "mitre:T1417.002",  # Overlay
+                "mitre:T1626",  # Device admin abuse
+            }
+        ),
         bonus=20.0,
         confidence=0.95,
     ),
@@ -75,25 +80,27 @@ SYNERGY_RULES: list[SynergyRule] = [
             "Payload dropper pattern: downloads new code at runtime via "
             "reflective loading over a network channel."
         ),
-        required_signals=frozenset({
-            "mitre:T1407",       # Download New Code at Runtime
-            "mitre:T1620",       # Reflective Code Loading
-            "domain:network",    # has network findings
-        }),
+        required_signals=frozenset(
+            {
+                "mitre:T1407",  # Download New Code at Runtime
+                "mitre:T1620",  # Reflective Code Loading
+                "domain:network",  # has network findings
+            }
+        ),
         bonus=15.0,
         confidence=0.90,
     ),
     SynergyRule(
         rule_id="SYN-004",
         name="SMS + Contacts + Network Exfil",
-        description=(
-            "Spyware pattern: exfiltrates PII (SMS + contacts) over the network."
+        description=("Spyware pattern: exfiltrates PII (SMS + contacts) over the network."),
+        required_signals=frozenset(
+            {
+                "mitre:T1636.004",  # SMS Collection
+                "mitre:T1636.003",  # Contact List
+                "domain:network",
+            }
         ),
-        required_signals=frozenset({
-            "mitre:T1636.004",   # SMS Collection
-            "mitre:T1636.003",   # Contact List
-            "domain:network",
-        }),
         bonus=12.0,
         confidence=0.90,
     ),
@@ -104,15 +111,16 @@ SYNERGY_RULES: list[SynergyRule] = [
             "Heavy evasion: obfuscated code with anti-analysis tricks and "
             "native components to hide malicious logic."
         ),
-        required_signals=frozenset({
-            "type:obfuscation",
-            "type:anti_analysis",
-            "type:native_code",
-        }),
+        required_signals=frozenset(
+            {
+                "type:obfuscation",
+                "type:anti_analysis",
+                "type:native_code",
+            }
+        ),
         bonus=10.0,
         confidence=0.85,
     ),
-
     # ── Medium-severity compound patterns ────────────────────────────────
     SynergyRule(
         rule_id="SYN-006",
@@ -121,10 +129,12 @@ SYNERGY_RULES: list[SynergyRule] = [
             "Reflective code execution combined with runtime command execution "
             "suggests payload unpacking or privilege escalation."
         ),
-        required_signals=frozenset({
-            "type:reflection",
-            "mitre:T1623",  # Command & Scripting Interpreter
-        }),
+        required_signals=frozenset(
+            {
+                "type:reflection",
+                "mitre:T1623",  # Command & Scripting Interpreter
+            }
+        ),
         bonus=8.0,
         confidence=0.80,
     ),
@@ -135,10 +145,12 @@ SYNERGY_RULES: list[SynergyRule] = [
             "App allows cleartext traffic AND is debuggable — trivially "
             "interceptable; may be intentional for testing or for MitM."
         ),
-        required_signals=frozenset({
-            "type:cleartext",
-            "type:debuggable",
-        }),
+        required_signals=frozenset(
+            {
+                "type:cleartext",
+                "type:debuggable",
+            }
+        ),
         bonus=5.0,
         confidence=0.70,
     ),
@@ -149,10 +161,12 @@ SYNERGY_RULES: list[SynergyRule] = [
             "Known malware signature match combined with dangerous permission "
             "profile — very high confidence of active threat."
         ),
-        required_signals=frozenset({
-            "domain:threat_intel",
-            "domain:permissions",
-        }),
+        required_signals=frozenset(
+            {
+                "domain:threat_intel",
+                "domain:permissions",
+            }
+        ),
         bonus=12.0,
         confidence=0.95,
     ),
@@ -163,10 +177,12 @@ SYNERGY_RULES: list[SynergyRule] = [
             "Custom cryptography combined with network communication — "
             "likely encrypting exfiltrated data to evade DLP."
         ),
-        required_signals=frozenset({
-            "mitre:T1573",   # Encrypted Channel
-            "mitre:T1041",   # Exfil over C2
-        }),
+        required_signals=frozenset(
+            {
+                "mitre:T1573",  # Encrypted Channel
+                "mitre:T1041",  # Exfil over C2
+            }
+        ),
         bonus=8.0,
         confidence=0.80,
     ),
@@ -177,10 +193,12 @@ SYNERGY_RULES: list[SynergyRule] = [
             "Accessibility service abuse with SMS access — can silently "
             "read and forward OTPs without user awareness."
         ),
-        required_signals=frozenset({
-            "mitre:T1417.001",  # Keylogging
-            "mitre:T1636.004",  # SMS Collection
-        }),
+        required_signals=frozenset(
+            {
+                "mitre:T1417.001",  # Keylogging
+                "mitre:T1636.004",  # SMS Collection
+            }
+        ),
         bonus=12.0,
         confidence=0.90,
     ),

@@ -9,6 +9,7 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
+from ai.integration import SephelaAnalysisPipeline
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.logging import get_logger
@@ -17,7 +18,6 @@ from app.db.session import AsyncSessionLocal
 from app.repositories.evidence import EvidenceRepository
 from app.services.stages import StageOutcome, StageRunner
 from app.tasks.celery_app import celery_app
-from ai.integration import SephelaAnalysisPipeline
 
 logger = get_logger(__name__)
 
@@ -41,10 +41,8 @@ async def _run(job_id: str) -> str:
             logger.warning("ai_sample_missing", job_id=job_id)
             return "missing"
 
-        stage = StageRunner(
-            session, jid, engine_name=ENGINE_NAME, engine_version=ENGINE_VERSION
-        )
-        
+        stage = StageRunner(session, jid, engine_name=ENGINE_NAME, engine_version=ENGINE_VERSION)
+
         outcome = await _execute(
             session=session, stage=stage, job_id=job_id, jid=jid, sample=sample
         )
@@ -65,7 +63,7 @@ async def _execute(
     # Load all existing evidence to feed the AI
     evidence_repo = EvidenceRepository(session)
     evidence_rows = await evidence_repo.list_for_job(jid)
-    
+
     if not evidence_rows:
         return await stage.skip("No evidence available to analyze.")
 
@@ -76,14 +74,14 @@ async def _execute(
     try:
         # Build pipeline with Phase 12 RAG
         pipeline = await SephelaAnalysisPipeline.build_with_rag()
-        
+
         # Execute the AI Graph
         result = await pipeline.analyze(
             apk_sha256=sample.sha256,
             evidence_envelope=evidence_envelope,
             job_id=job_id,
         )
-        
+
         # Aggregate findings from all agents
         all_findings: list[dict[str, Any]] = []
         for agent_name, agent_res in result.agent_results.items():
@@ -104,7 +102,7 @@ async def _execute(
             "agent_results": result.agent_results,
             "graph_state": result.graph_state,
         }
-        
+
         return await stage.complete(payload)
 
     except Exception as exc:
@@ -116,4 +114,5 @@ async def _execute(
 def analyze_ai(self: Any, job_id: str) -> str:
     """Celery task entrypoint for AI orchestration."""
     import asyncio
+
     return asyncio.run(_run(job_id))

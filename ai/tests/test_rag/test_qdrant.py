@@ -147,9 +147,7 @@ class TestSearch:
         fake = FakeQdrant({"/points/search": {"result": []}})
         vector = await embedder.embed_one("overlay")
 
-        await store_for(fake).search(
-            vector, top_k=3, filters=SearchFilter(trusted_only=False)
-        )
+        await store_for(fake).search(vector, top_k=3, filters=SearchFilter(trusted_only=False))
 
         assert "filter" not in fake.body()
 
@@ -188,7 +186,9 @@ class TestCollectionLifecycle:
         methods = [(r.method, str(r.url)) for r in fake.requests]
         assert methods[0][0] == "GET"
         assert any(m == "PUT" and m2.endswith("/collections/test_kb") for m, m2 in methods)
-        indexed = [json.loads(r.content)["field_name"] for r in fake.requests if "/index" in str(r.url)]
+        indexed = [
+            json.loads(r.content)["field_name"] for r in fake.requests if "/index" in str(r.url)
+        ]
         assert set(indexed) == {"trust", "kind", "doc_id", "families", "mitre", "tags"}
 
     async def test_an_existing_collection_is_left_alone(self) -> None:

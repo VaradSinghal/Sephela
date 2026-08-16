@@ -30,9 +30,8 @@ import json
 import logging
 import os
 import re
-import time
-from dataclasses import dataclass, field
-from typing import Any, Optional, Type
+from dataclasses import dataclass
+from typing import Any
 
 from pydantic import BaseModel
 
@@ -83,9 +82,7 @@ class ModelRouter:
     """
 
     def __init__(self, providers: list[BaseLLMProvider]) -> None:
-        self._by_name: dict[ProviderName, BaseLLMProvider] = {
-            p.provider_name: p for p in providers
-        }
+        self._by_name: dict[ProviderName, BaseLLMProvider] = {p.provider_name: p for p in providers}
 
     def resolve(self, model_id: str) -> BaseLLMProvider:
         # Step 1 — provider explicit support
@@ -95,9 +92,10 @@ class ModelRouter:
 
         # Step 2 — prefix map
         for prefix, provider_name in _MODEL_PROVIDER_MAP.items():
-            if model_id.startswith(prefix) or prefix in model_id:
-                if provider_name in self._by_name:
-                    return self._by_name[provider_name]
+            if (
+                model_id.startswith(prefix) or prefix in model_id
+            ) and provider_name in self._by_name:
+                return self._by_name[provider_name]
 
         # Step 3 — OpenRouter fallback
         if ProviderName.OPENROUTER in self._by_name:
@@ -129,13 +127,13 @@ class LLMFactory:
     def __init__(self) -> None:
         self._registry: dict[ProviderName, BaseLLMProvider] = {}
 
-    def register(self, provider: BaseLLMProvider) -> "LLMFactory":
+    def register(self, provider: BaseLLMProvider) -> LLMFactory:
         """Register a pre-built provider adapter."""
         self._registry[provider.provider_name] = provider
         _LOG.info("Registered provider: %s", provider.provider_name.value)
         return self
 
-    def register_from_env(self) -> "LLMFactory":
+    def register_from_env(self) -> LLMFactory:
         """
         Auto-register providers by reading environment variables.
 
@@ -166,6 +164,7 @@ class LLMFactory:
 
         if key := os.getenv("GEMINI_API_KEY"):
             from ai.llm.adapters import _GEMINI_BASE
+
             self.register(
                 OpenAIAdapter(api_key=key, base_url=_GEMINI_BASE, provider=ProviderName.GEMINI)
             )
@@ -178,7 +177,7 @@ class LLMFactory:
     def get_all(self) -> list[BaseLLMProvider]:
         return list(self._registry.values())
 
-    def get(self, name: ProviderName) -> Optional[BaseLLMProvider]:
+    def get(self, name: ProviderName) -> BaseLLMProvider | None:
         return self._registry.get(name)
 
 
@@ -191,8 +190,8 @@ class LLMFactory:
 class GenerateResult:
     """Result of a gateway.generate() call."""
 
-    content: str                    # raw LLM text content
-    parsed: Optional[Any]          # parsed Pydantic model instance (if schema given)
+    content: str  # raw LLM text content
+    parsed: Any | None  # parsed Pydantic model instance (if schema given)
     model: str
     provider: ProviderName
     usage: TokenUsage
@@ -238,7 +237,7 @@ class LLMGateway:
     # ------------------------------------------------------------------
 
     @classmethod
-    def from_env(cls, max_retries: int = 3) -> "LLMGateway":
+    def from_env(cls, max_retries: int = 3) -> LLMGateway:
         """
         Construct a gateway by reading API keys from environment variables.
 
@@ -260,7 +259,7 @@ class LLMGateway:
         cls,
         providers: list[BaseLLMProvider],
         max_retries: int = 3,
-    ) -> "LLMGateway":
+    ) -> LLMGateway:
         """Construct from a pre-built list of provider adapters."""
         return cls(providers=providers, max_retries=max_retries)
 
@@ -273,11 +272,11 @@ class LLMGateway:
         model_name: str,
         system_prompt: str,
         user_prompt: str,
-        response_schema: Optional[Type[BaseModel]] = None,
+        response_schema: type[BaseModel] | None = None,
         temperature: float = 0.1,
         max_tokens: int = 8192,
         timeout_s: float = 120.0,
-        extra_params: Optional[dict[str, Any]] = None,
+        extra_params: dict[str, Any] | None = None,
     ) -> GenerateResult:
         """
         Generate a completion.
@@ -319,7 +318,7 @@ class LLMGateway:
             extra_params=extra_params or {},
         )
 
-        last_error: Optional[Exception] = None
+        last_error: Exception | None = None
         attempts = 0
 
         for attempt in range(self._max_retries):
@@ -329,10 +328,14 @@ class LLMGateway:
                 break
             except Exception as exc:  # noqa: BLE001
                 last_error = exc
-                delay = self._base_retry_delay * (2 ** attempt)
+                delay = self._base_retry_delay * (2**attempt)
                 _LOG.warning(
                     "LLM attempt %d/%d failed for model %s: %s — retrying in %.1fs",
-                    attempt + 1, self._max_retries, model_name, exc, delay,
+                    attempt + 1,
+                    self._max_retries,
+                    model_name,
+                    exc,
+                    delay,
                 )
                 if attempt < self._max_retries - 1:
                     await asyncio.sleep(delay)
@@ -353,7 +356,7 @@ class LLMGateway:
         # ------------------------------------------------------------------
         # Schema validation + retry with correction prompt
         # ------------------------------------------------------------------
-        parsed: Optional[Any] = None
+        parsed: Any | None = None
         if response_schema is not None:
             parsed, raw_response, attempts = await self._validate_with_retry(
                 response_schema=response_schema,
@@ -380,12 +383,12 @@ class LLMGateway:
 
     async def _validate_with_retry(
         self,
-        response_schema: Type[BaseModel],
+        response_schema: type[BaseModel],
         raw_response: ChatCompletionResponse,
         original_request: ChatCompletionRequest,
         provider: BaseLLMProvider,
         attempts: int,
-    ) -> tuple[Optional[Any], ChatCompletionResponse, int]:
+    ) -> tuple[Any | None, ChatCompletionResponse, int]:
         """
         Try to parse and validate the response against the schema.
 
@@ -399,7 +402,8 @@ class LLMGateway:
         # Self-correction: ask the model to fix its output
         _LOG.warning(
             "Schema validation failed (%s): %s — attempting self-correction",
-            response_schema.__name__, error_msg,
+            response_schema.__name__,
+            error_msg,
         )
 
         schema_json = json.dumps(response_schema.model_json_schema(), indent=2)
@@ -420,7 +424,7 @@ class LLMGateway:
         correction_request = ChatCompletionRequest(
             model=original_request.model,
             messages=correction_messages,
-            temperature=0.0,   # deterministic for correction
+            temperature=0.0,  # deterministic for correction
             max_tokens=original_request.max_tokens,
             response_format="json_object",
             timeout_s=original_request.timeout_s,
@@ -433,9 +437,7 @@ class LLMGateway:
             if parsed is not None:
                 _LOG.info("Self-correction succeeded for %s", response_schema.__name__)
                 return parsed, corrected_response, attempts
-            _LOG.error(
-                "Self-correction failed for %s: %s", response_schema.__name__, error_msg2
-            )
+            _LOG.error("Self-correction failed for %s: %s", response_schema.__name__, error_msg2)
             return None, corrected_response, attempts
         except Exception as exc:  # noqa: BLE001
             _LOG.error("Self-correction request failed: %s", exc)
@@ -456,9 +458,7 @@ class LLMGateway:
 # ---------------------------------------------------------------------------
 
 
-def _try_parse(
-    content: str, schema: Type[BaseModel]
-) -> tuple[Optional[BaseModel], Optional[str]]:
+def _try_parse(content: str, schema: type[BaseModel]) -> tuple[BaseModel | None, str | None]:
     """
     Attempt to extract JSON from content and validate against schema.
 

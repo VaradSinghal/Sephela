@@ -2,10 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Dict, List
-
-
-FEW_SHOT_EXAMPLES: Dict[str, List[Dict[str, str]]] = {
+FEW_SHOT_EXAMPLES: dict[str, list[dict[str, str]]] = {
     "manifest_agent": [
         {
             "input": """Package: com.example.malware
@@ -32,7 +29,7 @@ debuggable: true""",
   "medium_findings": 0,
   "low_findings": 0,
   "info_findings": 0
-}"""
+}""",
         }
     ],
     "permission_agent": [
@@ -55,7 +52,7 @@ Code-used permissions: BIND_ACCESSIBILITY_SERVICE, SYSTEM_ALERT_WINDOW, RECEIVE_
   "high_count": 2,
   "medium_count": 0,
   "low_count": 0
-}"""
+}""",
         }
     ],
     "risk_agent": [
@@ -94,12 +91,12 @@ Deterministic baseline: score=78, tier=malicious, confidence=0.8""",
   "key_findings": ["Overlay attack capability", "Accessibility service abuse", "SMS interception", "Banking malware family attributed"],
   "risk_narrative": "This sample exhibits strong indicators of a banking trojan with overlay attack capabilities, accessibility service abuse for keylogging and UI injection, and SMS interception for 2FA bypass. Threat intelligence attributes it to a known banking malware family.",
   "recommended_actions": ["Block indicators at network perimeter", "Update mobile threat detection rules", "Notify fraud monitoring teams", "Initiate incident response if found in environment"]
-}"""
+}""",
         }
     ],
 }
 
 
-def get_few_shot(agent_name: str) -> List[Dict[str, str]]:
+def get_few_shot(agent_name: str) -> list[dict[str, str]]:
     """Get few-shot examples for an agent."""
     return FEW_SHOT_EXAMPLES.get(agent_name, [])

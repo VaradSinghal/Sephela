@@ -98,9 +98,7 @@ HARVEST_TYPES = ("url", "ip", "domain", "cert", "network", "behavior", "runtime_
 MAX_FINDING_ROWS = 2000
 
 
-async def gather_iocs(
-    session: AsyncSession, job_id: uuid.UUID, sample: Sample
-) -> list[Ioc]:
+async def gather_iocs(session: AsyncSession, job_id: uuid.UUID, sample: Sample) -> list[Ioc]:
     """Collect this job's indicators: the sample's digests plus upstream findings.
 
     Returns them in priority order — sample hashes first (the single most
@@ -144,9 +142,7 @@ async def _finding_rows(session: AsyncSession, job_id: uuid.UUID) -> list[dict[s
 
     def rank(row: dict[str, Any]) -> int:
         engine = str(row.get("source_engine") or "")
-        return ENGINE_PRIORITY.index(engine) if engine in ENGINE_PRIORITY else len(
-            ENGINE_PRIORITY
-        )
+        return ENGINE_PRIORITY.index(engine) if engine in ENGINE_PRIORITY else len(ENGINE_PRIORITY)
 
     rows.sort(key=rank)
     return rows

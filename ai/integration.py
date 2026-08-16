@@ -71,24 +71,14 @@ class AgentModelConfig:
     permission_agent: str = field(
         default_factory=lambda: os.getenv("PERMISSION_MODEL", "claude-opus-5")
     )
-    code_agent: str = field(
-        default_factory=lambda: os.getenv("CODE_MODEL", "claude-opus-5")
-    )
-    api_agent: str = field(
-        default_factory=lambda: os.getenv("API_MODEL", "claude-opus-5")
-    )
-    network_agent: str = field(
-        default_factory=lambda: os.getenv("NETWORK_MODEL", "claude-opus-5")
-    )
+    code_agent: str = field(default_factory=lambda: os.getenv("CODE_MODEL", "claude-opus-5"))
+    api_agent: str = field(default_factory=lambda: os.getenv("API_MODEL", "claude-opus-5"))
+    network_agent: str = field(default_factory=lambda: os.getenv("NETWORK_MODEL", "claude-opus-5"))
     threat_intel_agent: str = field(
         default_factory=lambda: os.getenv("THREAT_INTEL_MODEL", "claude-opus-5")
     )
-    risk_agent: str = field(
-        default_factory=lambda: os.getenv("RISK_MODEL", "claude-opus-5")
-    )
-    report_agent: str = field(
-        default_factory=lambda: os.getenv("REPORT_MODEL", "claude-opus-5")
-    )
+    risk_agent: str = field(default_factory=lambda: os.getenv("RISK_MODEL", "claude-opus-5"))
+    report_agent: str = field(default_factory=lambda: os.getenv("REPORT_MODEL", "claude-opus-5"))
 
     @classmethod
     def openrouter_defaults(cls) -> AgentModelConfig:
@@ -139,11 +129,11 @@ class PipelineResult:
 
     job_id: str
     apk_sha256: str
-    status: str                            # "completed" | "partial" | "failed"
-    report: dict[str, Any]                 # ReportResult serialised
-    risk_result: dict[str, Any]            # RiskAssessmentResult serialised
-    agent_results: dict[str, Any]          # All 6 analysis agent results
-    graph_state: dict[str, Any]            # Raw final GraphState for debugging
+    status: str  # "completed" | "partial" | "failed"
+    report: dict[str, Any]  # ReportResult serialised
+    risk_result: dict[str, Any]  # RiskAssessmentResult serialised
+    agent_results: dict[str, Any]  # All 6 analysis agent results
+    graph_state: dict[str, Any]  # Raw final GraphState for debugging
     errors: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
 
@@ -252,6 +242,7 @@ class SephelaAnalysisPipeline:
         This parses the bundled corpus offline.
         """
         from ai.rag.service import build_knowledge_service
+
         knowledge = await build_knowledge_service()
         gateway = LLMGateway.from_env()
         return cls(gateway=gateway, model_config=model_config, knowledge=knowledge, **kwargs)
@@ -279,6 +270,7 @@ class SephelaAnalysisPipeline:
             PipelineResult with report, risk_result, and all agent outputs.
         """
         import uuid
+
         if job_id is None:
             job_id = uuid.uuid4().hex
 
@@ -293,7 +285,8 @@ class SephelaAnalysisPipeline:
 
         _LOG.info(
             '{"event":"pipeline_start","job_id":"%s","sha256":"%s"}',
-            job_id, apk_sha256[:16],
+            job_id,
+            apk_sha256[:16],
         )
 
         try:
@@ -329,7 +322,9 @@ class SephelaAnalysisPipeline:
 
         _LOG.info(
             '{"event":"pipeline_complete","job_id":"%s","status":"%s","agents_completed":%d}',
-            job_id, status, len(agent_results),
+            job_id,
+            status,
+            len(agent_results),
         )
 
         return PipelineResult(
@@ -365,14 +360,14 @@ class SephelaAnalysisPipeline:
         """Build per-agent config overrides from AgentModelConfig."""
         mc = self._model_config
         return {
-            "manifest_agent":    {"model": mc.manifest_agent},
-            "permission_agent":  {"model": mc.permission_agent},
-            "code_agent":        {"model": mc.code_agent},
-            "api_agent":         {"model": mc.api_agent},
-            "network_agent":     {"model": mc.network_agent},
-            "threat_intel_agent":{"model": mc.threat_intel_agent},
-            "risk_agent":        {"model": mc.risk_agent},
-            "report_agent":      {"model": mc.report_agent},
+            "manifest_agent": {"model": mc.manifest_agent},
+            "permission_agent": {"model": mc.permission_agent},
+            "code_agent": {"model": mc.code_agent},
+            "api_agent": {"model": mc.api_agent},
+            "network_agent": {"model": mc.network_agent},
+            "threat_intel_agent": {"model": mc.threat_intel_agent},
+            "risk_agent": {"model": mc.risk_agent},
+            "report_agent": {"model": mc.report_agent},
         }
 
 
