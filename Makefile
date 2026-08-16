@@ -24,7 +24,10 @@ revision:      ## Autogenerate a migration: make revision m="add users"
 install-engines: ## Install analysis engines into the backend venv (editable)
 	cd backend && pip install -e ../engines/dynamic -e ../engines/threat_intel
 
-test:          ## Run backend tests
+install-ai:    ## Install the GenAI subsystem (the AI stage imports `ai`)
+	pip install -e ai
+
+test:          ## Run backend tests (needs install-ai: app.tasks.ai imports `ai`)
 	cd backend && pytest
 
 test-engines:  ## Run the analysis engines' own test suites
@@ -81,6 +84,7 @@ ci-gates:      ## Run ALL CI gates locally (lint, type, test, security, import, 
 	$(MAKE) lint
 	$(MAKE) type
 	$(MAKE) test-cov
+	$(MAKE) test-ai
 	$(MAKE) security-scan
 	$(MAKE) import-lint
 	$(MAKE) lint-fe

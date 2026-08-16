@@ -33,7 +33,7 @@ class RiskAgent(BaseAgent[RiskAnalysis]):
     def __init__(self, llm_client: Any = None):
         config = AgentConfig(
             name="risk_agent",
-            model="claude-3-5-sonnet-20241022",
+            model="claude-opus-5",
             temperature=0.1,
             max_tokens=4096,
             output_schema=RiskAnalysis,

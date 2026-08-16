@@ -44,10 +44,17 @@ components are isolated from everything else.
   correlation of hashes/domains/IPs/certs/URLs/families. Caches aggressively;
   rate-limit aware; circuit-breakered.
 
-### 7. GenAI / Multi-Agent Service (`ai/`) — Phase 7 → 13
-- **Owns:** reasoning over evidence. Phase 7: staged LangGraph pipeline. Phase 13:
-  specialized agents (Manifest, Permission, Code, API, Network, TI, Risk, Report)
-  coordinated by an orchestrator agent. RAG retrieval (Phase 12) feeds context.
+### 7. GenAI / Multi-Agent Service (`ai/`) — Phase 7 → 13 ✅
+- **Owns:** reasoning over evidence. Eight specialized agents (Manifest,
+  Permission, Code, API, Network, TI, Risk, Report) run as nodes in a LangGraph
+  state machine: the six analysis agents fan out in parallel from a single gate,
+  fan in at a join barrier, then feed Risk and Report sequentially. RAG retrieval
+  (Phase 12) feeds context. Routing policy lives in `ai/orchestration/router.py` —
+  notably, a run whose analysis agents failed ≥50% aborts rather than scoring risk
+  off half-missing evidence.
+- **Durability:** agent calls are expensive and runs are long, so graph state is
+  checkpointed per node; `PipelineRunner` resumes a half-finished job instead of
+  re-running all eight agents.
 - **Constraint:** consumes only Evidence Envelopes; emits validated structured
   findings with provenance. Cost/latency isolated from API path.
 

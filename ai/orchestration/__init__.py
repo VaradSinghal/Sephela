@@ -4,19 +4,26 @@ Sephela AI Orchestration — LangGraph-based parallel multi-agent pipeline.
 Public API
 ----------
 
-New LangGraph layer (graph_state / orchestrator / workflow / router):
-
     from ai.orchestration import (
         GraphState, initial_state,           # state
         build_workflow, WorkflowConfig,      # workflow
-        PipelineRunner,                      # high-level runner
+        PipelineRunner,                      # checkpointed, resumable runner
     )
 
-Legacy (preserved for backwards-compatibility):
-    AnalysisState, create_analysis_graph
+The graph is assembled once by ``build_workflow`` and has a single shape:
+``orchestrator_start → check_evidence → fanout_gate → six analysis agents in
+parallel → analysis_join → risk_agent → report_agent → finalise``, with an
+``abort`` branch off every gate. Nodes live in ``orchestrator``, edge decisions in
+``router``, and the checkpointable state contract in ``graph_state``.
 """
 
-# ── New LangGraph layer ──────────────────────────────────────────────────────
+# ── LangGraph layer ──────────────────────────────────────────────────────────
+# ── Checkpointers ────────────────────────────────────────────────────────────
+from ai.orchestration.checkpointer import (
+    InMemoryCheckpointer,
+    PostgresCheckpointer,
+    get_checkpointer,
+)
 from ai.orchestration.graph_state import (
     AgentResultEntry,
     AgentRunStatus,
@@ -41,21 +48,10 @@ from ai.orchestration.router import (
     route_after_start,
     route_analysis_join,
 )
-from ai.orchestration.workflow import WorkflowConfig, build_workflow, get_mermaid_diagram
 
 # ── Runner (unchanged) ───────────────────────────────────────────────────────
 from ai.orchestration.runner import PipelineRunner, PipelineRunResult
-
-# ── Checkpointers ────────────────────────────────────────────────────────────
-from ai.orchestration.checkpointer import (
-    InMemoryCheckpointer,
-    PostgresCheckpointer,
-    get_checkpointer,
-)
-
-# ── Legacy graph (backwards-compat) ─────────────────────────────────────────
-from ai.orchestration.graph import create_analysis_graph, AnalysisState
-from ai.orchestration.state import AgentState
+from ai.orchestration.workflow import WorkflowConfig, build_workflow, get_mermaid_diagram
 
 __all__ = [
     # graph_state
@@ -90,8 +86,4 @@ __all__ = [
     "InMemoryCheckpointer",
     "PostgresCheckpointer",
     "get_checkpointer",
-    # legacy
-    "create_analysis_graph",
-    "AnalysisState",
-    "AgentState",
 ]

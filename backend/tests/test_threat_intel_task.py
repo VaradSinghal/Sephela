@@ -263,8 +263,15 @@ class TestProviderConfiguration:
         ):
             monkeypatch.setattr(svc.settings, attr, None)
 
+        # URLhaus is the only feed left that answers without a key — MalwareBazaar
+        # now requires an Auth-Key, so it drops out rather than 401-ing per lookup.
         names = {p.name for p in svc.build_providers()}
-        assert names == {"urlhaus", "bazaar"}
+        assert names == {"urlhaus"}
+
+    def test_bazaar_appears_once_its_key_is_configured(self, monkeypatch) -> None:
+        monkeypatch.setattr(svc.settings, "bazaar_api_key", "mb-key")
+
+        assert "bazaar" in {p.name for p in svc.build_providers()}
 
     def test_configured_keys_add_their_providers(self, monkeypatch) -> None:
         monkeypatch.setattr(svc.settings, "virustotal_api_key", "vt-key")
@@ -282,6 +289,7 @@ class TestPipelineWiring:
 
         monkeypatch.setattr(pipeline.settings, "dynamic_enabled", False)
         monkeypatch.setattr(pipeline.settings, "threat_intel_enabled", True)
+        monkeypatch.setattr(pipeline.settings, "ai_enabled", False)
 
         dispatched: list[Any] = []
         monkeypatch.setattr(pipeline, "chain", lambda *sigs: _FakeChain(sigs, dispatched))
@@ -297,6 +305,7 @@ class TestPipelineWiring:
 
         monkeypatch.setattr(pipeline.settings, "dynamic_enabled", False)
         monkeypatch.setattr(pipeline.settings, "threat_intel_enabled", False)
+        monkeypatch.setattr(pipeline.settings, "ai_enabled", False)
 
         dispatched: list[Any] = []
         monkeypatch.setattr(pipeline, "chain", lambda *sigs: _FakeChain(sigs, dispatched))
@@ -305,6 +314,41 @@ class TestPipelineWiring:
         pipeline.analyze.run(str(JOB_ID))
 
         assert [s["task"] for s in dispatched] == ["pipeline.finalize"]
+
+    def test_the_ai_stage_is_gated_on_its_own_flag(self, monkeypatch) -> None:
+        # It is the one stage that cannot degrade without a credential, so a
+        # deployment with no LLM key must not have it dispatched at all.
+        from app.tasks import pipeline
+
+        monkeypatch.setattr(pipeline.settings, "dynamic_enabled", False)
+        monkeypatch.setattr(pipeline.settings, "threat_intel_enabled", False)
+        monkeypatch.setattr(pipeline.settings, "ai_enabled", False)
+
+        dispatched: list[Any] = []
+        monkeypatch.setattr(pipeline, "chain", lambda *sigs: _FakeChain(sigs, dispatched))
+        _stub_claim(monkeypatch)
+
+        pipeline.analyze.run(str(JOB_ID))
+
+        assert "ai.analyze" not in [s["task"] for s in dispatched]
+
+    def test_ai_runs_after_threat_intel_so_it_sees_the_verdicts(self, monkeypatch) -> None:
+        # The agents reason over threat-intel verdicts, so enrichment must land
+        # in the envelope before the AI stage reads it.
+        from app.tasks import pipeline
+
+        monkeypatch.setattr(pipeline.settings, "dynamic_enabled", False)
+        monkeypatch.setattr(pipeline.settings, "threat_intel_enabled", True)
+        monkeypatch.setattr(pipeline.settings, "ai_enabled", True)
+
+        dispatched: list[Any] = []
+        monkeypatch.setattr(pipeline, "chain", lambda *sigs: _FakeChain(sigs, dispatched))
+        _stub_claim(monkeypatch)
+
+        pipeline.analyze.run(str(JOB_ID))
+
+        names = [s["task"] for s in dispatched]
+        assert names == ["threat_intel.analyze", "ai.analyze", "pipeline.finalize"]
 
     def test_threat_intel_runs_after_dynamic_analysis(self, monkeypatch) -> None:
         # It enriches what the analysis engines produced, so it must come later.

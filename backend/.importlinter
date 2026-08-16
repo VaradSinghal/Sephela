@@ -1,6 +1,9 @@
 [importlinter]
+# Required because contracts below forbid external packages (celery, sqlalchemy).
+include_external_packages = True
 root_packages =
     app
+    ai
     sephela_static
     sephela_dynamic
     sephela_threat_intel
@@ -8,7 +11,7 @@ root_packages =
     sephela_reporting
 
 [importlinter:contract:engines-independence]
-name = Engines must not import backend or worker code
+name = Engines must not import backend, worker, or AI code
 type = forbidden
 source_modules =
     sephela_static
@@ -18,20 +21,51 @@ source_modules =
     sephela_reporting
 forbidden_modules =
     app
+    ai
     celery
+
+[importlinter:contract:ai-independence]
+name = The AI subsystem must not import backend or worker code
+# ai/ scales and deploys on its own cadence (doc 12): the backend calls into it,
+# never the reverse. A single `from app...` here would couple LLM iteration to the
+# API's DB session and make the subsystem unextractable.
+type = forbidden
+source_modules =
+    ai
+forbidden_modules =
+    app
+    celery
+    sephela_static
+    sephela_dynamic
+    sephela_threat_intel
+    sephela_code_intel
+    sephela_reporting
 
 [importlinter:contract:routers-no-db]
 name = API routers must not access the database directly
 type = forbidden
+# Only direct imports count: a router calling a repository is the pattern this
+# contract exists to encourage, and that repository of course imports sqlalchemy.
+allow_indirect_imports = True
 source_modules =
     app.api
 forbidden_modules =
     app.db.session
     sqlalchemy
+ignore_imports =
+    # deps.py is the dependency-injection seam whose job is to hand a session to
+    # routes — the one place that is *supposed* to know about sessions.
+    app.api.deps -> app.db.session
+    app.api.deps -> sqlalchemy
+    # The readiness probe pings the engine to report liveness. That is an
+    # operational check, not data access through the ORM.
+    app.api.v1.routers.health -> app.db.session
+    app.api.v1.routers.health -> sqlalchemy
 
 [importlinter:contract:services-no-direct-db]
 name = Services must not use raw session — go through repositories
 type = forbidden
+allow_indirect_imports = True
 source_modules =
     app.services
 forbidden_modules =

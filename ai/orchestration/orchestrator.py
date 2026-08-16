@@ -236,18 +236,9 @@ def make_agent_node(
 
             _log("info", "agent_start", job_id, agent_name, span_id=span_id, apk_sha256=apk_sha256)
 
-            # Mark as running
-            running_entry: AgentResultEntry = AgentResultEntry(
-                agent_name=agent_name,
-                status=AgentRunStatus.RUNNING.value,
-                started_at=started_at,
-                span_id=span_id,
-                retry_count=retry_counts.get(agent_name, 0),
-            )
-            yield_state: dict[str, Any] = {
-                "agent_results": {agent_name: running_entry},
-            }
-
+            # A node returns state once, on completion, so there is no RUNNING
+            # entry to publish here — in-flight progress is observable through the
+            # checkpointer (see PipelineRunner.get_status) and the agent's span.
             t0 = time.perf_counter()
             result_entry: AgentResultEntry
             new_findings: list[dict[str, Any]] = []
@@ -636,11 +627,20 @@ def make_report_node(
                 span.record_exception(exc)
                 _log("error", "agent_failed", job_id, agent_name, error=str(exc))
 
+        # The report *is* the deliverable, so a run that produced none is not
+        # complete — reporting it as such would hand the API an empty verdict to
+        # serve. Analysis still ran, so the honest terminal state is PARTIAL.
+        terminal_status = (
+            PipelineStatus.COMPLETED.value
+            if report_dict
+            else PipelineStatus.PARTIAL.value
+        )
+
         partial: dict[str, Any] = {
             "agent_results": {agent_name: result_entry},
             "report": report_dict,
             "all_findings": [],
-            "pipeline_status": PipelineStatus.COMPLETED.value,
+            "pipeline_status": terminal_status,
             "completed_at": datetime.now(timezone.utc).isoformat(),
         }
         return partial

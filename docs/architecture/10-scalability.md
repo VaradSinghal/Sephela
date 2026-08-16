@@ -9,7 +9,7 @@ rearchitecting. Mapping of future requirement → enabling design decision:
 | **Threat Intelligence** (P11) | `q.threat_intel` + `enrichments` table + provider abstraction; runs in parallel group with AI; scoring already consumes TI verdicts. |
 | **GenAI Orchestration** (P7) | `ai/` isolated service; LangGraph state machine; evidence-only inputs; structured-output validation. |
 | **Vector Database / RAG** (P12) | Qdrant reserved; retrieval step already placed *before* LLM inference in DFD-3; knowledge-base ingestion pipeline slot. |
-| **Multi-agent AI** (P13) | Orchestrator + specialized agents map 1:1 to evidence domains; agents are pluggable nodes in the LangGraph graph; no pipeline change. |
+| **Multi-agent AI** (P13) ✅ | Landed as predicted: agents are pluggable LangGraph nodes mapping 1:1 to evidence domains, added without a pipeline change — the AI stage is one more entry in the Celery chain. |
 | **Multiple malware engines** | Uniform Evidence Envelope + engine registry; adding an engine = new module + queue + pipeline entry, zero orchestration rewrite. |
 | **Horizontal scaling** | Stateless API; per-workload queues; KEDA autoscaling; idempotent cacheable stages; partitioned tables. |
 

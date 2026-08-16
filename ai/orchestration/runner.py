@@ -1,199 +1,246 @@
-"""Pipeline runner for executing the analysis graph."""
+"""High-level runner for the multi-agent analysis graph.
+
+``PipelineRunner`` is the checkpointed, resumable face of the LangGraph workflow
+built by :mod:`ai.orchestration.workflow`. It exists alongside
+:class:`ai.integration.SephelaAnalysisPipeline` and the two differ in what they
+own:
+
+- ``SephelaAnalysisPipeline`` owns *provider wiring* — it builds an LLM gateway
+  from the environment, maps each agent to a model, and runs the graph once.
+- ``PipelineRunner`` owns *durability* — it holds a checkpointer so a run can be
+  resumed from its last completed node after a worker dies mid-job, and it
+  exposes the partial state of an in-flight run.
+
+Long-running APK analysis needs both, so neither wraps the other: a caller that
+just wants a verdict uses the pipeline, and the Celery worker (which can lose its
+process at any point) uses the runner.
+"""
 
 from __future__ import annotations
 
-import asyncio
 import logging
-from typing import Any, Dict, Optional
-from dataclasses import dataclass
-from datetime import datetime
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING, Any
 
-from langgraph.checkpoint.base import BaseCheckpointSaver
-
-from ai.orchestration.graph import create_analysis_graph, AnalysisState
-from ai.orchestration.state import PipelineStatus
-from ai.agents.base import AgentRegistry
 from ai.orchestration.checkpointer import get_checkpointer
+from ai.orchestration.graph_state import (
+    GraphState,
+    PipelineStatus,
+    initial_state,
+)
+from ai.orchestration.workflow import WorkflowConfig, build_workflow
 
-logger = logging.getLogger(__name__)
+if TYPE_CHECKING:
+    from langgraph.checkpoint.base import BaseCheckpointSaver
+
+logger = logging.getLogger("sephela.orchestration.runner")
+
+# LangGraph's own guard against a cyclic graph running away. The workflow is a
+# DAG whose longest path is ~8 nodes, so this only ever trips on a real bug.
+_RECURSION_LIMIT = 50
 
 
 @dataclass
 class PipelineRunResult:
-    """Result of a pipeline run."""
+    """Outcome of one graph execution, flattened out of ``GraphState``."""
+
     job_id: str
-    sample_sha256: str
+    apk_sha256: str
     status: PipelineStatus
-    agent_results: Dict[str, Any]
-    all_findings: list
-    risk_score: Optional[float] = None
-    risk_tier: Optional[str] = None
-    report: Optional[Any] = None
+    agent_results: dict[str, Any] = field(default_factory=dict)
+    all_findings: list[dict[str, Any]] = field(default_factory=list)
+    risk_score: float | None = None
+    risk_tier: str | None = None
+    report: dict[str, Any] | None = None
     execution_time_ms: int = 0
-    error: Optional[str] = None
-    completed_at: Optional[datetime] = None
+    error: str | None = None
+    errors: list[str] = field(default_factory=list)
+    completed_at: datetime | None = None
 
 
 class PipelineRunner:
-    """Orchestrates the multi-agent analysis pipeline."""
+    """Runs the multi-agent workflow with checkpointing and resume support."""
 
     def __init__(
         self,
-        registry: AgentRegistry,
-        checkpointer: Optional[BaseCheckpointSaver] = None,
+        llm_client: Any = None,
+        *,
+        knowledge: Any = None,
+        checkpointer: BaseCheckpointSaver | None = None,
         env: str = "development",
-        connection_string: Optional[str] = None,
-    ):
-        self.registry = registry
+        connection_string: str | None = None,
+        config: WorkflowConfig | None = None,
+    ) -> None:
+        """
+        Args:
+            llm_client:        Async LLM gateway handed to every agent.
+            knowledge:         Optional RAG knowledge service (Phase 12).
+            checkpointer:      Explicit checkpointer; resolved from ``env`` if None.
+            env:               Selects the default checkpointer implementation.
+            connection_string: Postgres DSN for the production checkpointer.
+            config:            Pre-built WorkflowConfig. Its ``checkpointer``,
+                               ``llm_client``, and ``knowledge`` are filled in from
+                               the arguments above when it leaves them unset, so a
+                               caller can override timeouts without re-specifying
+                               the wiring.
+        """
         self.checkpointer = checkpointer or get_checkpointer(env, connection_string)
-        # create_analysis_graph() already returns a compiled StateGraph
-        # (graph.py calls workflow.compile(...)), so do not compile again.
-        self.compiled_graph = create_analysis_graph(registry, self.checkpointer)
+
+        cfg = config or WorkflowConfig()
+        if cfg.llm_client is None:
+            cfg.llm_client = llm_client
+        if cfg.knowledge is None:
+            cfg.knowledge = knowledge
+        if cfg.checkpointer is None:
+            cfg.checkpointer = self.checkpointer
+        self.config = cfg
+
+        # build_workflow returns an already-compiled graph — do not compile again.
+        self.compiled_graph = build_workflow(cfg)
+
+    # ------------------------------------------------------------------
+    # Graph config
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _graph_config(job_id: str, overrides: dict[str, Any] | None = None) -> dict[str, Any]:
+        """Build the LangGraph invocation config.
+
+        ``thread_id`` is what the checkpointer keys state on, so it must be the
+        job id — that is what makes ``resume`` able to find a half-finished run.
+        """
+        cfg: dict[str, Any] = {
+            "configurable": {"thread_id": job_id, "job_id": job_id},
+            "recursion_limit": _RECURSION_LIMIT,
+        }
+        if overrides:
+            configurable = {**cfg["configurable"], **overrides.pop("configurable", {})}
+            cfg.update(overrides)
+            cfg["configurable"] = configurable
+        return cfg
+
+    # ------------------------------------------------------------------
+    # Run
+    # ------------------------------------------------------------------
 
     async def run(
         self,
         job_id: str,
-        sample_sha256: str,
-        evidence: Dict[str, Any],
-        context: Optional[Dict[str, Any]] = None,
-        config: Optional[Dict[str, Any]] = None,
+        apk_sha256: str,
+        evidence: dict[str, Any],
+        config_overrides: dict[str, Any] | None = None,
+        config: dict[str, Any] | None = None,
     ) -> PipelineRunResult:
-        """Run the complete analysis pipeline."""
-        start_time = datetime.utcnow()
-
-        # Initialize state
-        initial_state = AnalysisState(
+        """Execute the full pipeline for one job."""
+        started = datetime.now(UTC)
+        state = initial_state(
             job_id=job_id,
-            sample_sha256=sample_sha256,
+            apk_sha256=apk_sha256,
             evidence=evidence,
-            context=context or {},
-            status=PipelineStatus.PENDING,
+            config_overrides=config_overrides,
         )
 
-        # Graph config
-        graph_config = {
-            "configurable": {
-                "job_id": job_id,
-                "sample_sha256": sample_sha256,
-            }
-        }
-        if config:
-            graph_config.update(config)
-
+        logger.info('{"event": "pipeline_run_start", "job_id": "%s"}', job_id)
         try:
-            logger.info(f"Starting pipeline for job {job_id}")
-            
-            # Execute graph
-            final_state = await self.compiled_graph.ainvoke(initial_state, graph_config)
-            
-            execution_time = int((datetime.utcnow() - start_time).total_seconds() * 1000)
-            
-            # Extract results
-            risk_result = final_state.agent_results.get("risk_agent")
-            report_result = final_state.agent_results.get("report_agent")
-            
-            risk_score = None
-            risk_tier = None
-            if risk_result and risk_result.output:
-                risk_score = risk_result.output.score
-                risk_tier = risk_result.output.tier.value if hasattr(risk_result.output.tier, 'value') else str(risk_result.output.tier)
-
-            report = None
-            if report_result and report_result.output:
-                report = report_result.output.report
-
-            status = PipelineStatus.COMPLETED
-            if final_state.error:
-                status = PipelineStatus.FAILED
-
-            logger.info(f"Pipeline completed for job {job_id} with status {status}")
-
-            return PipelineRunResult(
-                job_id=job_id,
-                sample_sha256=sample_sha256,
-                status=status,
-                agent_results={k: v.model_dump() if hasattr(v, 'model_dump') else v for k, v in final_state.agent_results.items()},
-                all_findings=[f.model_dump() if hasattr(f, 'model_dump') else f for f in final_state.all_findings],
-                risk_score=risk_score,
-                risk_tier=risk_tier,
-                report=report,
-                execution_time_ms=execution_time,
-                error=final_state.error,
-                completed_at=datetime.utcnow(),
+            final_state = await self.compiled_graph.ainvoke(
+                state, self._graph_config(job_id, config)
             )
-
-        except Exception as e:
-            logger.exception(f"Pipeline failed for job {job_id}: {e}")
-            execution_time = int((datetime.utcnow() - start_time).total_seconds() * 1000)
+        except Exception as exc:  # noqa: BLE001
+            # A crash here means the graph itself failed, not an agent — agent
+            # failures are absorbed into state by make_agent_node.
+            logger.exception('{"event": "pipeline_run_error", "job_id": "%s"}', job_id)
             return PipelineRunResult(
                 job_id=job_id,
-                sample_sha256=sample_sha256,
+                apk_sha256=apk_sha256,
                 status=PipelineStatus.FAILED,
-                agent_results={},
-                all_findings=[],
-                execution_time_ms=execution_time,
-                error=str(e),
-                completed_at=datetime.utcnow(),
+                execution_time_ms=_elapsed_ms(started),
+                error=str(exc),
+                errors=[str(exc)],
+                completed_at=datetime.now(UTC),
             )
+
+        return self._to_result(final_state, job_id, apk_sha256, started)
 
     async def resume(
         self,
         job_id: str,
-        sample_sha256: str,
-        config: Optional[Dict[str, Any]] = None,
+        apk_sha256: str = "",
+        config: dict[str, Any] | None = None,
     ) -> PipelineRunResult:
-        """Resume a pipeline from the last checkpoint."""
-        graph_config = {
-            "configurable": {
-                "job_id": job_id,
-                "sample_sha256": sample_sha256,
-            }
-        }
-        if config:
-            graph_config.update(config)
+        """Resume a previously checkpointed run from its last completed node.
 
-        # Get last checkpoint
-        checkpoint_tuple = await self.checkpointer.aget_tuple(graph_config)
-        if not checkpoint_tuple:
+        Passing ``None`` as the input is what tells LangGraph to continue from the
+        checkpoint rather than start over.
+        """
+        started = datetime.now(UTC)
+        graph_config = self._graph_config(job_id, config)
+
+        checkpoint = await self.checkpointer.aget_tuple(graph_config)
+        if not checkpoint:
             raise ValueError(f"No checkpoint found for job {job_id}")
 
-        logger.info(f"Resuming pipeline for job {job_id} from checkpoint")
-        
-        # Resume from checkpoint
+        logger.info('{"event": "pipeline_resume", "job_id": "%s"}', job_id)
         final_state = await self.compiled_graph.ainvoke(None, graph_config)
-        
-        # ... same result extraction as run()
-        execution_time = 0  # Would calculate from checkpoint
-        
-        return PipelineRunResult(
-            job_id=job_id,
-            sample_sha256=sample_sha256,
-            status=PipelineStatus.COMPLETED if not final_state.error else PipelineStatus.FAILED,
-            agent_results={k: v.model_dump() if hasattr(v, 'model_dump') else v for k, v in final_state.agent_results.items()},
-            all_findings=[f.model_dump() if hasattr(f, 'model_dump') else f for f in final_state.all_findings],
-            execution_time_ms=execution_time,
-            error=final_state.error,
-            completed_at=datetime.utcnow(),
+        return self._to_result(
+            final_state,
+            job_id,
+            apk_sha256 or final_state.get("apk_sha256", ""),
+            started,
         )
 
-    async def get_status(self, job_id: str, sample_sha256: str) -> Optional[Dict[str, Any]]:
-        """Get current pipeline status from checkpoints."""
-        config = {
-            "configurable": {
-                "job_id": job_id,
-                "sample_sha256": sample_sha256,
-            }
-        }
-        checkpoint = await self.checkpointer.aget_tuple(config)
+    async def get_status(self, job_id: str) -> dict[str, Any] | None:
+        """Report an in-flight run's progress from its latest checkpoint."""
+        checkpoint = await self.checkpointer.aget_tuple(self._graph_config(job_id))
         if not checkpoint:
             return None
-        
-        state = checkpoint.checkpoint
+
+        values = checkpoint.checkpoint.get("channel_values", {}) or {}
+        agent_results = values.get("agent_results", {}) or {}
         return {
             "job_id": job_id,
-            "status": state.get("status"),
-            "current_agent": state.get("current_agent"),
-            "completed_agents": list(state.get("agent_results", {}).keys()),
-            "error": state.get("error"),
-            "updated_at": checkpoint.metadata.get("created_at"),
+            "status": values.get("pipeline_status"),
+            "completed_agents": sorted(agent_results),
+            "error": values.get("error"),
+            "updated_at": (checkpoint.metadata or {}).get("created_at"),
         }
+
+    # ------------------------------------------------------------------
+    # State → result
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _to_result(
+        state: GraphState,
+        job_id: str,
+        apk_sha256: str,
+        started: datetime,
+    ) -> PipelineRunResult:
+        risk_result = state.get("risk_result") or {}
+        report = state.get("report") or {}
+        errors = list(state.get("errors") or [])
+
+        raw_status = state.get("pipeline_status")
+        try:
+            status = PipelineStatus(raw_status)
+        except ValueError:
+            status = PipelineStatus.FAILED
+
+        return PipelineRunResult(
+            job_id=job_id,
+            apk_sha256=apk_sha256,
+            status=status,
+            agent_results=dict(state.get("agent_results") or {}),
+            all_findings=list(state.get("all_findings") or []),
+            risk_score=risk_result.get("score") or risk_result.get("risk_score"),
+            risk_tier=risk_result.get("tier") or risk_result.get("risk_tier"),
+            report=report or None,
+            execution_time_ms=_elapsed_ms(started),
+            error=state.get("error"),
+            errors=errors,
+            completed_at=datetime.now(UTC),
+        )
+
+
+def _elapsed_ms(since: datetime) -> int:
+    return int((datetime.now(UTC) - since).total_seconds() * 1000)

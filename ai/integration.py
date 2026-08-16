@@ -40,12 +40,10 @@ Public API
 
 from __future__ import annotations
 
-import asyncio
 import logging
-from dataclasses import dataclass, field
-from typing import Any, Optional
-
 import os
+from dataclasses import dataclass, field
+from typing import Any
 
 from ai.llm.factory import LLMGateway
 from ai.orchestration.workflow import WorkflowConfig, build_workflow
@@ -68,56 +66,65 @@ class AgentModelConfig:
     """
 
     manifest_agent: str = field(
-        default_factory=lambda: os.getenv("MANIFEST_MODEL", "claude-3-5-sonnet-20241022")
+        default_factory=lambda: os.getenv("MANIFEST_MODEL", "claude-opus-5")
     )
     permission_agent: str = field(
-        default_factory=lambda: os.getenv("PERMISSION_MODEL", "claude-3-5-sonnet-20241022")
+        default_factory=lambda: os.getenv("PERMISSION_MODEL", "claude-opus-5")
     )
     code_agent: str = field(
-        default_factory=lambda: os.getenv("CODE_MODEL", "claude-3-5-sonnet-20241022")
+        default_factory=lambda: os.getenv("CODE_MODEL", "claude-opus-5")
     )
     api_agent: str = field(
-        default_factory=lambda: os.getenv("API_MODEL", "claude-3-5-sonnet-20241022")
+        default_factory=lambda: os.getenv("API_MODEL", "claude-opus-5")
     )
     network_agent: str = field(
-        default_factory=lambda: os.getenv("NETWORK_MODEL", "claude-3-5-sonnet-20241022")
+        default_factory=lambda: os.getenv("NETWORK_MODEL", "claude-opus-5")
     )
     threat_intel_agent: str = field(
-        default_factory=lambda: os.getenv("THREAT_INTEL_MODEL", "claude-3-5-sonnet-20241022")
+        default_factory=lambda: os.getenv("THREAT_INTEL_MODEL", "claude-opus-5")
     )
     risk_agent: str = field(
-        default_factory=lambda: os.getenv("RISK_MODEL", "claude-3-5-sonnet-20241022")
+        default_factory=lambda: os.getenv("RISK_MODEL", "claude-opus-5")
     )
     report_agent: str = field(
-        default_factory=lambda: os.getenv("REPORT_MODEL", "claude-3-5-sonnet-20241022")
+        default_factory=lambda: os.getenv("REPORT_MODEL", "claude-opus-5")
     )
 
     @classmethod
-    def openrouter_defaults(cls) -> "AgentModelConfig":
-        """Use OpenRouter-routed models for all agents."""
+    def openrouter_defaults(cls) -> AgentModelConfig:
+        """Route every agent through OpenRouter instead of a first-party API.
+
+        OpenRouter's catalogue lags first-party releases, so verify these slugs at
+        https://openrouter.ai/models before relying on this preset.
+        """
         return cls(
-            manifest_agent="anthropic/claude-3.5-sonnet",
-            permission_agent="anthropic/claude-3.5-sonnet",
-            code_agent="deepseek/deepseek-coder",
-            api_agent="deepseek/deepseek-coder",
-            network_agent="anthropic/claude-3.5-sonnet",
-            threat_intel_agent="anthropic/claude-3.5-sonnet",
-            risk_agent="anthropic/claude-3.5-sonnet",
-            report_agent="anthropic/claude-3.5-sonnet",
+            manifest_agent="anthropic/claude-opus-5",
+            permission_agent="anthropic/claude-opus-5",
+            code_agent="anthropic/claude-opus-5",
+            api_agent="anthropic/claude-opus-5",
+            network_agent="anthropic/claude-opus-5",
+            threat_intel_agent="anthropic/claude-opus-5",
+            risk_agent="anthropic/claude-opus-5",
+            report_agent="anthropic/claude-opus-5",
         )
 
     @classmethod
-    def fast_cheap(cls) -> "AgentModelConfig":
-        """Use faster, cheaper models for all agents."""
+    def fast_cheap(cls) -> AgentModelConfig:
+        """Triage preset: cheap model for extraction, best model for judgement.
+
+        The six analysis agents mostly restate structure they were handed, which a
+        small model does acceptably. Risk and report are where the actual reasoning
+        happens — downgrading those changes the verdict, so they stay on Opus.
+        """
         return cls(
-            manifest_agent="claude-3-5-haiku-20241022",
-            permission_agent="claude-3-5-haiku-20241022",
-            code_agent="claude-3-5-haiku-20241022",
-            api_agent="claude-3-5-haiku-20241022",
-            network_agent="claude-3-5-haiku-20241022",
-            threat_intel_agent="claude-3-5-haiku-20241022",
-            risk_agent="claude-3-5-sonnet-20241022",   # risk/report always use best
-            report_agent="claude-3-5-sonnet-20241022",
+            manifest_agent="claude-haiku-4-5",
+            permission_agent="claude-haiku-4-5",
+            code_agent="claude-haiku-4-5",
+            api_agent="claude-haiku-4-5",
+            network_agent="claude-haiku-4-5",
+            threat_intel_agent="claude-haiku-4-5",
+            risk_agent="claude-opus-5",
+            report_agent="claude-opus-5",
         )
 
 
@@ -177,7 +184,7 @@ class SephelaAnalysisPipeline:
     def __init__(
         self,
         gateway: LLMGateway,
-        model_config: Optional[AgentModelConfig] = None,
+        model_config: AgentModelConfig | None = None,
         analysis_timeout_s: float = 300.0,
         risk_timeout_s: float = 180.0,
         report_timeout_s: float = 240.0,
@@ -213,9 +220,9 @@ class SephelaAnalysisPipeline:
     @classmethod
     def from_env(
         cls,
-        model_config: Optional[AgentModelConfig] = None,
+        model_config: AgentModelConfig | None = None,
         **kwargs: Any,
-    ) -> "SephelaAnalysisPipeline":
+    ) -> SephelaAnalysisPipeline:
         """
         Construct from environment variables.
 
@@ -228,18 +235,18 @@ class SephelaAnalysisPipeline:
     def from_gateway(
         cls,
         gateway: LLMGateway,
-        model_config: Optional[AgentModelConfig] = None,
+        model_config: AgentModelConfig | None = None,
         **kwargs: Any,
-    ) -> "SephelaAnalysisPipeline":
+    ) -> SephelaAnalysisPipeline:
         """Construct from a pre-built LLMGateway."""
         return cls(gateway=gateway, model_config=model_config, **kwargs)
 
     @classmethod
     async def build_with_rag(
         cls,
-        model_config: Optional[AgentModelConfig] = None,
+        model_config: AgentModelConfig | None = None,
         **kwargs: Any,
-    ) -> "SephelaAnalysisPipeline":
+    ) -> SephelaAnalysisPipeline:
         """
         Construct a pipeline with the full RAG knowledge service attached.
         This parses the bundled corpus offline.
@@ -257,7 +264,7 @@ class SephelaAnalysisPipeline:
         self,
         apk_sha256: str,
         evidence_envelope: dict[str, Any],
-        job_id: Optional[str] = None,
+        job_id: str | None = None,
     ) -> PipelineResult:
         """
         Run the complete multi-agent analysis pipeline.
@@ -337,9 +344,18 @@ class SephelaAnalysisPipeline:
         )
 
     def get_mermaid_diagram(self) -> str:
-        """Return the LangGraph workflow as a Mermaid diagram string."""
-        from ai.orchestration.workflow import get_mermaid_diagram
-        return get_mermaid_diagram(self._compiled_graph)
+        """Return this pipeline's compiled graph as a Mermaid diagram string.
+
+        Drawn from the graph this instance already built rather than via
+        ``workflow.get_mermaid_diagram()``, which takes a WorkflowConfig and would
+        compile a second, differently-configured graph.
+        """
+        try:
+            return self._compiled_graph.get_graph().draw_mermaid()
+        except Exception:  # noqa: BLE001
+            from ai.orchestration.workflow import get_mermaid_diagram
+
+            return get_mermaid_diagram()
 
     # ------------------------------------------------------------------
     # Internal
@@ -410,7 +426,7 @@ INTEGRATION_WIRING = """
 ║    │       adds prior agent context (if any)                            ║
 ║    │                                                                     ║
 ║    ├── LLMGateway.generate(                                             ║
-║    │       model_name="claude-3-5-sonnet-20241022",                     ║
+║    │       model_name="claude-opus-5",                     ║
 ║    │       system_prompt=system,                                        ║
 ║    │       user_prompt=user,                                            ║
 ║    │       response_schema=ManifestAnalysisResult,                      ║

@@ -1,186 +1,99 @@
-"""Custom checkpointer for LangGraph pipeline persistence."""
+"""Checkpointer selection for the analysis graph.
+
+APK analysis is long-running and agent calls are expensive, so a worker that dies
+mid-job must be able to resume rather than re-run eight agents. That durability is
+LangGraph's checkpointer contract — and it is a larger contract than it looks:
+besides ``aget_tuple``/``aput`` a saver must implement ``aput_writes`` and the
+channel-versioning hooks the graph engine calls between every node.
+
+This module therefore *selects* a checkpointer rather than implementing one. A
+hand-rolled saver that covers only the sync methods compiles and then fails at the
+first node boundary with ``NotImplementedError`` from the base class, which is a
+much worse failure than not having checkpointing at all.
+
+    get_checkpointer("development")             → in-memory, per-process
+    get_checkpointer("production", dsn)          → Postgres-backed, durable
+
+The in-memory saver is per-process, so it gives resume-after-exception within a
+worker but not resume-after-restart. Production must pass a DSN.
+"""
 
 from __future__ import annotations
 
-import json
-import asyncio
-from typing import Any, Dict, List, Optional, AsyncIterator
-from dataclasses import dataclass, field
-from datetime import datetime
-from abc import ABC, abstractmethod
+from typing import TYPE_CHECKING, Any
 
-from langgraph.checkpoint.base import BaseCheckpointSaver, Checkpoint, CheckpointMetadata, CheckpointTuple
+from langgraph.checkpoint.memory import MemorySaver
 
+if TYPE_CHECKING:
+    from langgraph.checkpoint.base import BaseCheckpointSaver
 
-@dataclass
-class PipelineCheckpoint:
-    """Checkpoint data for pipeline persistence."""
-    job_id: str
-    sample_sha256: str
-    step: int
-    state: Dict[str, Any]
-    metadata: Dict[str, Any] = field(default_factory=dict)
-    created_at: datetime = field(default_factory=datetime.utcnow)
+# Kept under the old name because callers (and ai.orchestration's public API)
+# import it; it is LangGraph's saver, which implements the full async contract.
+InMemoryCheckpointer = MemorySaver
+
+_POSTGRES_INSTALL_HINT = (
+    "Postgres checkpointing needs the optional dependency: "
+    "pip install 'langgraph-checkpoint-postgres'"
+)
 
 
-class PostgresCheckpointer(BaseCheckpointSaver):
-    """PostgreSQL-backed checkpointer for production use."""
-    
-    def __init__(self, connection_string: str):
-        self.connection_string = connection_string
-        self._pool = None
-    
-    async def setup(self):
-        """Initialize connection pool and create tables."""
-        import asyncpg
-        self._pool = await asyncpg.create_pool(self.connection_string)
-        
-        async with self._pool.acquire() as conn:
-            await conn.execute("""
-                CREATE TABLE IF NOT EXISTS pipeline_checkpoints (
-                    job_id UUID NOT NULL,
-                    sample_sha256 CHAR(64) NOT NULL,
-                    step INT NOT NULL,
-                    state JSONB NOT NULL,
-                    metadata JSONB DEFAULT '{}',
-                    created_at TIMESTAMPTZ DEFAULT NOW(),
-                    PRIMARY KEY (job_id, step)
-                );
-                CREATE INDEX IF NOT EXISTS idx_checkpoints_job ON pipeline_checkpoints(job_id);
-            """)
-    
-    async def aput(self, config: Dict[str, Any], checkpoint: Checkpoint, metadata: CheckpointMetadata) -> None:
-        """Save checkpoint asynchronously."""
-        if not self._pool:
-            await self.setup()
-            
-        job_id = config.get("configurable", {}).get("job_id", "unknown")
-        sample_sha256 = config.get("configurable", {}).get("sample_sha256", "unknown")
-        step = metadata.get("step", 0)
-        
-        async with self._pool.acquire() as conn:
-            await conn.execute("""
-                INSERT INTO pipeline_checkpoints (job_id, sample_sha256, step, state, metadata)
-                VALUES ($1, $2, $3, $4, $5)
-                ON CONFLICT (job_id, step) DO UPDATE SET
-                    state = EXCLUDED.state,
-                    metadata = EXCLUDED.metadata,
-                    created_at = NOW()
-            """, job_id, sample_sha256, step, json.dumps(checkpoint), json.dumps(metadata))
-    
-    async def aget_tuple(self, config: Dict[str, Any]) -> Optional[CheckpointTuple]:
-        """Get checkpoint tuple asynchronously."""
-        if not self._pool:
-            await self.setup()
-            
-        job_id = config.get("configurable", {}).get("job_id")
-        if not job_id:
-            return None
-            
-        async with self._pool.acquire() as conn:
-            row = await conn.fetchrow("""
-                SELECT state, metadata, created_at FROM pipeline_checkpoints
-                WHERE job_id = $1
-                ORDER BY step DESC
-                LIMIT 1
-            """, job_id)
-            
-            if not row:
-                return None
-                
-            return CheckpointTuple(
-                config=config,
-                checkpoint=json.loads(row["state"]),
-                metadata=json.loads(row["metadata"]),
-                parent_config=None
-            )
-    
-    async def alist(self, config: Dict[str, Any]) -> AsyncIterator[CheckpointTuple]:
-        """List checkpoints asynchronously."""
-        if not self._pool:
-            await self.setup()
-            
-        job_id = config.get("configurable", {}).get("job_id")
-        if not job_id:
-            return
-            
-        async with self._pool.acquire() as conn:
-            rows = await conn.fetch("""
-                SELECT state, metadata, created_at FROM pipeline_checkpoints
-                WHERE job_id = $1
-                ORDER BY step DESC
-            """, job_id)
-            
-            for row in rows:
-                yield CheckpointTuple(
-                    config=config,
-                    checkpoint=json.loads(row["state"]),
-                    metadata=json.loads(row["metadata"]),
-                    parent_config=None
-                )
-    
-    async def close(self):
-        """Close connection pool."""
-        if self._pool:
-            await self._pool.close()
+def PostgresCheckpointer(connection_string: str) -> BaseCheckpointSaver:  # noqa: N802
+    """Build a durable Postgres-backed checkpointer.
+
+    Named as a class for backwards compatibility with the previous API — it is a
+    factory because LangGraph's Postgres saver owns a connection pool that has to
+    be created around the DSN rather than subclassed.
+
+    The returned saver still needs ``await saver.setup()`` once per database to
+    create its tables; that is a migration-time concern, not a per-job one.
+    """
+    try:
+        from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+    except ImportError as exc:  # pragma: no cover - depends on optional extra
+        raise ImportError(_POSTGRES_INSTALL_HINT) from exc
+
+    try:
+        from psycopg_pool import AsyncConnectionPool
+    except ImportError as exc:  # pragma: no cover - depends on optional extra
+        raise ImportError(_POSTGRES_INSTALL_HINT) from exc
+
+    # open=False so constructing the checkpointer does not perform I/O; the pool
+    # opens lazily on first use, which keeps this factory callable from sync code.
+    pool: Any = AsyncConnectionPool(
+        conninfo=connection_string,
+        max_size=10,
+        open=False,
+        kwargs={"autocommit": True, "row_factory": "dict_row"},
+    )
+    return AsyncPostgresSaver(pool)
 
 
-class InMemoryCheckpointer(BaseCheckpointSaver):
-    """In-memory checkpointer for development/testing."""
-    
-    def __init__(self):
-        self._checkpoints: Dict[str, List[PipelineCheckpoint]] = {}
-    
-    def put(self, config: Dict[str, Any], checkpoint: Checkpoint, metadata: CheckpointMetadata) -> None:
-        job_id = config.get("configurable", {}).get("job_id", "unknown")
-        sample_sha256 = config.get("configurable", {}).get("sample_sha256", "unknown")
-        step = metadata.get("step", 0)
-        
-        if job_id not in self._checkpoints:
-            self._checkpoints[job_id] = []
-        
-        cp = PipelineCheckpoint(
-            job_id=job_id,
-            sample_sha256=sample_sha256,
-            step=step,
-            state=checkpoint,
-            metadata=metadata
-        )
-        self._checkpoints[job_id].append(cp)
-    
-    def get_tuple(self, config: Dict[str, Any]) -> Optional[CheckpointTuple]:
-        job_id = config.get("configurable", {}).get("job_id")
-        if not job_id or job_id not in self._checkpoints:
-            return None
-        
-        latest = max(self._checkpoints[job_id], key=lambda c: c.step)
-        return CheckpointTuple(
-            config=config,
-            checkpoint=latest.state,
-            metadata=latest.metadata,
-            parent_config=None
-        )
-    
-    def list(self, config: Dict[str, Any]) -> List[CheckpointTuple]:
-        job_id = config.get("configurable", {}).get("job_id")
-        if not job_id or job_id not in self._checkpoints:
-            return []
-        
-        return [
-            CheckpointTuple(
-                config=config,
-                checkpoint=cp.state,
-                metadata=cp.metadata,
-                parent_config=None
-            )
-            for cp in sorted(self._checkpoints[job_id], key=lambda c: c.step, reverse=True)
-        ]
+def get_checkpointer(
+    env: str = "development",
+    connection_string: str | None = None,
+) -> BaseCheckpointSaver:
+    """Return the checkpointer appropriate to the environment.
 
-
-def get_checkpointer(env: str = "development", connection_string: str = None) -> BaseCheckpointSaver:
-    """Factory function to get appropriate checkpointer."""
+    Args:
+        env:               ``"production"`` selects the durable Postgres saver;
+                           anything else selects the in-memory one.
+        connection_string: Postgres DSN. Required for production — a production
+                           worker that silently checkpointed to memory would lose
+                           every in-flight job on restart, so this raises instead.
+    """
     if env == "production":
         if not connection_string:
-            raise ValueError("Connection string required for production checkpointer")
+            raise ValueError(
+                "Connection string required for the production checkpointer — "
+                "in-memory checkpoints do not survive a worker restart."
+            )
         return PostgresCheckpointer(connection_string)
-    return InMemoryCheckpointer()
+    return MemorySaver()
+
+
+__all__ = [
+    "InMemoryCheckpointer",
+    "MemorySaver",
+    "PostgresCheckpointer",
+    "get_checkpointer",
+]

@@ -312,11 +312,14 @@ class TestHttpErrorMapping:
 
 class TestRegistry:
     def test_keyless_providers_survive_an_empty_config(self) -> None:
+        # URLhaus is the only feed that still answers anonymously; MalwareBazaar
+        # began requiring an Auth-Key, so it is key-gated like the commercial ones.
         names = {p.name for p in build_providers({})}
-        assert names == {"urlhaus", "bazaar"}
+        assert names == {"urlhaus"}
 
     def test_keyed_providers_appear_once_configured(self) -> None:
-        names = {p.name for p in build_providers({"virustotal": "k", "abuseipdb": "k"})}
+        keys = {"virustotal": "k", "abuseipdb": "k", "bazaar": "k"}
+        names = {p.name for p in build_providers(keys)}
         assert names == {"urlhaus", "bazaar", "virustotal", "abuseipdb"}
 
     def test_blank_keys_are_treated_as_absent(self) -> None:

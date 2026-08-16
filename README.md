@@ -8,10 +8,16 @@ enrichment → multi-agent GenAI reasoning → explainable risk score → SOC-re
 reports.
 
 ## Status
-**Phases 1–12 implemented.** Architecture, backend, frontend, upload pipeline,
+**Phases 1–13 implemented.** Architecture, backend, frontend, upload pipeline,
 static/code-intel/dynamic engines, GenAI reasoning, risk scoring, reporting,
-threat-intel enrichment, and the RAG knowledge service are in place. Phases 13
-(multi-agent) and 14 (production hardening) remain.
+threat-intel enrichment, the RAG knowledge service, and the multi-agent
+orchestrator are in place. Phase 14 (production hardening) remains.
+
+The multi-agent stage runs six analysis agents in parallel (manifest, permission,
+code, API, network, threat-intel), fans them into risk scoring, then report
+generation — see [ai/orchestration/](ai/orchestration/). It is gated off by
+default (`SEPHELA_AI_ENABLED`) because it is the one stage that needs a paid LLM
+credential to do anything at all.
 
 | Component | Location |
 |---|---|
@@ -43,7 +49,7 @@ Start at [docs/architecture/00-overview.md](docs/architecture/00-overview.md).
 ## Roadmap
 Phase 1 Architecture ✅ → 2 Backend ✅ → 3 Frontend ✅ → 4 Upload ✅ → 5 Static ✅
 → 6 Code Intel ✅ → 7 GenAI ✅ → 8 Risk Scoring ✅ → 9 Reporting ✅ → 10 Dynamic ✅
-→ 11 Threat Intel ✅ → 12 RAG ✅ → 13 Multi-Agent → 14 Production Hardening.
+→ 11 Threat Intel ✅ → 12 RAG ✅ → 13 Multi-Agent ✅ → 14 Production Hardening.
 
 Every later phase has a reserved home in the architecture (see doc 10).
 
@@ -52,11 +58,15 @@ Every later phase has a reserved home in the architecture (see doc 10).
 make up               # postgres, redis, qdrant, api, worker
 make migrate          # apply DB migrations
 make install-engines  # install the analysis engines into the backend venv
+make install-ai       # install the GenAI subsystem (the AI stage imports `ai`)
 make test             # backend tests
 make test-engines     # each engine's own suite
-make test-ai          # GenAI, scoring, and RAG suites
+make test-ai          # multi-agent, GenAI, scoring, and RAG suites
 ```
 
-Threat intel works with no API keys (URLhaus and MalwareBazaar are keyless) and the
-RAG service needs no vector database or embedding key by default — see
+`make install-ai` is not optional for the backend suite: `app.tasks.ai` imports the
+`ai` package, so collection fails without it.
+
+Threat intel works with no API keys (URLhaus answers anonymously) and the RAG
+service needs no vector database or embedding key by default — see
 [.env.example](.env.example) for what each key adds.

@@ -8,7 +8,7 @@ The LLMGateway is the single entry point for all agent LLM calls:
     gateway = LLMGateway(providers=[...])     # explicit
 
     result = await gateway.generate(
-        model_name="claude-3-5-sonnet-20241022",
+        model_name="claude-opus-5",
         system_prompt="You are ...",
         user_prompt="Analyse this ...",
         response_schema=MyPydanticModel,      # optional
@@ -283,7 +283,7 @@ class LLMGateway:
         Generate a completion.
 
         Args:
-            model_name:      LLM model identifier (e.g. "claude-3-5-sonnet-20241022").
+            model_name:      LLM model identifier (e.g. "claude-opus-5").
             system_prompt:   System/context instructions.
             user_prompt:     User turn (evidence + analysis request).
             response_schema: Optional Pydantic model class.  When provided, the

@@ -1,0 +1,70 @@
+[project]
+name = "sephela-ai"
+version = "0.1.0"
+description = "Sephela GenAI subsystem — multi-agent LangGraph orchestration, risk scoring, and RAG"
+requires-python = ">=3.12"
+dependencies = [
+    "pydantic>=2.7",
+    "httpx>=0.27",
+    "langgraph>=0.2",
+    "typing-extensions>=4.11",
+]
+
+[project.optional-dependencies]
+# Tracing is optional: ai/ degrades to no-op spans when OTel is absent.
+otel = [
+    "opentelemetry-api>=1.24",
+    "opentelemetry-sdk>=1.24",
+]
+dev = [
+    "pytest>=8.2",
+    "pytest-asyncio>=0.23",
+    "ruff>=0.4",
+    "mypy>=1.10",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "UP", "B", "C4", "SIM", "TCH"]
+
+[tool.mypy]
+python_version = "3.12"
+ignore_missing_imports = true
+plugins = ["pydantic.mypy"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+# The import package must stay `ai` (every import in the repo says `from ai...`)
+# while pyproject.toml lives inside ai/ like every other component's.
+#
+# Hence the explicit map rather than `packages.find(where="..")`: pointing find at
+# the parent makes setuptools write an editable .pth containing the *repo root*,
+# which puts `backend`, `docs`, and `frontend` on sys.path for anything that
+# installs this package. Mapping `ai` to this directory keeps the install scoped to
+# the one package, matching how engines/* install.
+#
+# Packages are listed explicitly because find() cannot express "these directories
+# are subpackages of ai" from inside ai/. A new subpackage must be added here.
+[tool.setuptools]
+package-dir = {"ai" = "."}
+packages = [
+    "ai",
+    "ai.agents",
+    "ai.llm",
+    "ai.orchestration",
+    "ai.prompts",
+    "ai.prompts.shared",
+    "ai.rag",
+    "ai.schemas",
+    "ai.scoring",
+    "ai.validation",
+]

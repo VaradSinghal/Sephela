@@ -11,17 +11,22 @@ Current shape (docs/architecture/05-messaging.md):
       └─ chain:
            dynamic_analysis      (Phase 10, policy-gated)
            → threat_intel        (Phase 11, enriches whatever evidence exists)
+           → ai                  (Phase 13, multi-agent reasoning over all evidence)
            → finalize            (aggregate stage statuses → job status)
 
-Stages for static, code_intel, ai, scoring, and reporting slot in between as their
+Stages for static, code_intel, scoring, and reporting slot in between as their
 phases land; ``finalize`` already aggregates whatever ran.
 
 Threat-intel is sequenced *after* the analysis engines because it enriches the
 indicators they produce — it has nothing to work with until they have run. The
 messaging design pairs it in a parallel group with AI analysis (both consume
-evidence and neither feeds the other); it is chained here because the AI stage has
-no orchestration task yet, and moving to ``group()`` is a one-line change that
-needs no modification to either task.
+evidence and neither feeds the other); it is chained here so the AI stage sees
+threat-intel verdicts in the same envelope its agents reason over, and moving to
+``group()`` is a one-line change that needs no modification to either task.
+
+The AI stage is gated on ``ai_enabled`` because it is the one stage that cannot
+run without a paid credential — with no LLM key configured it would fail every
+job rather than degrade, so a fresh deployment leaves it off.
 
 Every task is DB-driven and never trusts the previous message payload beyond the
 job id, so runs are safe to retry and resume.
@@ -41,10 +46,10 @@ from app.core.config import settings
 from app.core.logging import get_logger
 from app.db.models.analysis import AnalysisJob, JobStatus, StageRun, StageStatus
 from app.db.session import AsyncSessionLocal
+from app.tasks.ai import analyze_ai
 from app.tasks.celery_app import celery_app
 from app.tasks.dynamic import analyze_dynamic
 from app.tasks.threat_intel import analyze_threat_intel
-from app.tasks.ai import analyze_ai
 
 logger = get_logger(__name__)
 
@@ -154,10 +159,8 @@ def analyze(self, job_id: str) -> str:  # type: ignore[no-untyped-def]
         stages.append(analyze_dynamic.si(job_id))
     if settings.threat_intel_enabled:
         stages.append(analyze_threat_intel.si(job_id))
-    
-    # AI Orchestrator always runs after Threat Intel
-    stages.append(analyze_ai.si(job_id))
-    
+    if settings.ai_enabled:
+        stages.append(analyze_ai.si(job_id))
     stages.append(finalize.si(job_id))
 
     chain(*stages).apply_async()
@@ -166,7 +169,7 @@ def analyze(self, job_id: str) -> str:  # type: ignore[no-untyped-def]
         job_id=job_id,
         dynamic=settings.dynamic_enabled,
         threat_intel=settings.threat_intel_enabled,
-        ai=True,
+        ai=settings.ai_enabled,
     )
     return JobStatus.running.value
 

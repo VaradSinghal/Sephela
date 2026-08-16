@@ -91,9 +91,10 @@ class WorkflowConfig:
 
     Attributes:
         llm_client:          Async LLM client passed to every agent.
-        checkpointer:        LangGraph checkpointer for state persistence
-                             (use InMemoryCheckpointer for development,
-                             PostgresCheckpointer for production).
+        checkpointer:        LangGraph checkpointer for state persistence.
+                             Obtain one from ``get_checkpointer(env, dsn)`` rather
+                             than constructing a saver by hand — the graph engine
+                             needs the full async saver contract.
         analysis_timeout_s:  Per-agent wall-clock timeout for the six analysis
                              agents (manifest, permission, code, api, network,
                              threat_intel).

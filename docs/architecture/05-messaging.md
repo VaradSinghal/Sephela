@@ -38,6 +38,17 @@ job.created
     policy-gated; scoring waits on it via the chord when enabled)
 ```
 
+**As implemented today** (`backend/app/tasks/pipeline.py`), the chain is
+`dynamic → threat_intel → ai → finalize`, each stage gated by its own feature flag.
+Two deliberate differences from the diagram above:
+
+- `ai_analysis` is **chained after** `threat_intel` rather than grouped with it, so
+  the threat-intel verdicts are in the envelope the agents reason over. Moving to
+  `group()` is a one-line change if the ordering ever stops paying for itself.
+- Risk scoring and reporting are not separate Celery stages: the multi-agent graph
+  already ends in Risk → Report nodes (Phase 13), so a second orchestration hop
+  would only re-load the same evidence.
+
 Each stage:
 1. Loads its inputs from DB/storage (never from the previous task's return payload
    beyond references) → **stateless, resumable**.

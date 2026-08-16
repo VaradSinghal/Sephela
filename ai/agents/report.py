@@ -19,7 +19,7 @@ class ReportAgent(BaseAgent[ReportGenerationResult]):
     def __init__(self, llm_client: Any = None):
         config = AgentConfig(
             name="report_agent",
-            model="claude-3-5-sonnet-20241022",
+            model="claude-opus-5",
             temperature=0.2,
             max_tokens=8192,
             output_schema=ReportGenerationResult,

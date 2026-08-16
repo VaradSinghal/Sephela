@@ -123,14 +123,14 @@ class OpenRouterModelRegistry:
 
     RECOMMENDED_MODELS = {
         "analysis": [
-            "anthropic/claude-3.5-sonnet",
-            "anthropic/claude-3.5-haiku",
-            "anthropic/claude-3-opus",
+            "anthropic/claude-opus-5",
+            "anthropic/claude-sonnet-5",
+            "anthropic/claude-haiku-4.5",
             "openai/gpt-4o",
             "openai/gpt-4o-mini",
         ],
         "fast": [
-            "anthropic/claude-3.5-haiku",
+            "anthropic/claude-haiku-4.5",
             "openai/gpt-4o-mini",
             "google/gemini-flash-1.5",
         ],
@@ -140,7 +140,7 @@ class OpenRouterModelRegistry:
             "google/gemma-2-9b-it",
         ],
         "specialized_code": [
-            "anthropic/claude-3.5-sonnet",
+            "anthropic/claude-opus-5",
             "openai/gpt-4o",
             "deepseek/deepseek-coder",
         ],

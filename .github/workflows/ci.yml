@@ -100,6 +100,8 @@ jobs:
         run: |
           cd backend
           pip install -e ".[dev]"
+          # app.tasks.ai imports the `ai` package, so collection fails without it.
+          pip install -e ../ai
       - name: Run tests with coverage
         run: |
           cd backend
@@ -159,6 +161,7 @@ jobs:
           pip install -e ../engines/threat_intel
           pip install -e ../engines/code_intel
           pip install -e ../engines/reporting
+          pip install -e ../ai
       - name: lint-imports
         run: cd backend && lint-imports
 
@@ -184,6 +187,22 @@ jobs:
         run: |
           cd engines/${{ matrix.engine }}
           pytest
+
+  # ──────────────────────────────────────────────
+  # GenAI subsystem: multi-agent orchestration, scoring, RAG
+  # ──────────────────────────────────────────────
+  ai-tests:
+    name: AI Subsystem Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install the AI subsystem
+        run: pip install -e "./ai[dev]"
+      - name: Run tests
+        run: pytest ai/tests
 
   # ──────────────────────────────────────────────
   # Frontend: lint + type-check + format

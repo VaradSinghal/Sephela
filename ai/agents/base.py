@@ -61,7 +61,7 @@ T = TypeVar('T', bound=BaseModel)
 class AgentConfig(BaseModel):
     """Agent configuration."""
     name: str
-    model: str = "claude-3-5-sonnet-20241022"
+    model: str = "claude-opus-5"
     temperature: float = 0.1
     max_tokens: int = 8192
     timeout_seconds: int = 120

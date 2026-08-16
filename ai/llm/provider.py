@@ -4,7 +4,7 @@ ai/llm/provider.py — Provider-agnostic LLM abstraction layer.
 Agents NEVER call a provider directly. They call:
 
     response = await llm.generate(
-        model_name="claude-3-5-sonnet-20241022",
+        model_name="claude-opus-5",
         system_prompt="...",
         user_prompt="...",
         response_schema=MyPydanticModel,   # optional — triggers structured output
