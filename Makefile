@@ -8,8 +8,11 @@ help:
 	@grep -E '^[a-zA-Z0-9_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
 	  awk 'BEGIN {FS = ":.*?## "}; {printf "  %-16s %s\n", $$1, $$2}'
 
-up:            ## Start local full stack (postgres, redis, api, worker)
+up:            ## Start local full stack (postgres, redis, qdrant, api, worker, frontend)
 	$(COMPOSE) up --build
+
+up-api:        ## Start the backend stack only (no dashboard)
+	$(COMPOSE) up --build postgres redis qdrant api worker
 
 down:          ## Stop the stack and remove volumes
 	$(COMPOSE) down -v
@@ -24,10 +27,16 @@ revision:      ## Autogenerate a migration: make revision m="add users"
 	$(COMPOSE) run --rm api alembic revision --autogenerate -m "$(m)"
 
 install-engines: ## Install analysis engines into the backend venv (editable)
-	cd backend && pip install -e ../engines/dynamic -e ../engines/threat_intel
+	cd backend && pip install -e ../engines/static -e ../engines/code_intel \
+	  -e ../engines/dynamic -e ../engines/threat_intel -e ../engines/reporting
 
 install-ai:    ## Install the GenAI subsystem (the AI stage imports `ai`)
-	pip install -e ai
+	# The [otel] extra is not optional despite its name: ai/orchestration/
+	# orchestrator.py imports opentelemetry at module scope, so a bare
+	# `pip install -e ai` leaves `import ai` failing with ModuleNotFoundError —
+	# which takes the whole backend suite with it (app.tasks.pipeline imports
+	# app.tasks.ai). Making that import lazy would let the extra be an extra again.
+	pip install -e "ai[otel]"
 
 bootstrap-admin: ## Create the first org + admin user: make bootstrap-admin ORG="Bank" EMAIL=a@b.c
 	cd backend && python -m app.cli bootstrap "$(ORG)" "$(EMAIL)" --generate-password

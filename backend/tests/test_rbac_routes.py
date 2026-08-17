@@ -53,6 +53,10 @@ class FakeJob:
         self.error = None
         self.created_at = datetime.now(UTC)
         self.completed_at = None
+        # Null until the scoring stage runs, which is the state these RBAC tests
+        # exercise — an unscored job must still serialise.
+        self.risk_score = None
+        self.risk_tier = None
 
 
 class FakeJobRepo:

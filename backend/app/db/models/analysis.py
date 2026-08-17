@@ -2,10 +2,17 @@
 
 Introduces the sample / job / stage tables needed to accept uploads and track
 their lifecycle, the ``evidence`` and ``findings`` tables that engine stages write
-into, and the ``enrichments`` table backing the threat-intel cache. Risk scores
-and reports arrive with their respective phases (see
-docs/architecture/04-data-model.md). No malware-analysis logic lives here — only
-the persistence backbone the pipeline hangs off.
+into, and the ``enrichments`` table backing the threat-intel cache
+(docs/architecture/04-data-model.md).
+
+Risk scores and rendered reports are *not* separate tables: both are engine
+output, so they live in ``evidence`` like every other stage's, with the report's
+rendered bytes in object storage behind a ``format → key`` manifest. The one
+exception is ``analysis_jobs.risk_score`` / ``risk_tier``, denormalised so a job
+list can rank by risk without joining evidence.
+
+No malware-analysis logic lives here — only the persistence backbone the pipeline
+hangs off.
 """
 
 from __future__ import annotations
@@ -93,6 +100,11 @@ class AnalysisJob(UUIDMixin, TimestampMixin, Base):
     priority: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
     progress: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Denormalised from the scoring stage's envelope so job lists can rank and
+    # filter by risk without joining evidence. Null until scoring runs — which is
+    # not the same as a score of zero, hence nullable rather than defaulted.
+    risk_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    risk_tier: Mapped[str | None] = mapped_column(String(16), nullable=True, index=True)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 

@@ -99,7 +99,9 @@ def _stub_apk(monkeypatch, tmp_path: Path):
         apk.write_bytes(b"PK\x03\x04")
         return apk
 
-    monkeypatch.setattr(dyn, "_materialize_apk", _fake)
+    # Patched on the dynamic module, where it is bound by the import, not on
+    # app.services.samples — the task calls the name it imported.
+    monkeypatch.setattr(dyn, "materialize_apk", _fake)
 
 
 async def _run(stage: FakeStageRunner, runner: Any, engine: Any, sample: Sample, tmp_path: Path):
@@ -200,7 +202,7 @@ async def test_missing_apk_bytes_fail_before_the_sandbox_runs(
     async def _boom(sample: Sample, dest_dir: Path) -> Path:
         raise FileNotFoundError("samples/ab/ab/....apk")
 
-    monkeypatch.setattr(dyn, "_materialize_apk", _boom)
+    monkeypatch.setattr(dyn, "materialize_apk", _boom)
     stage, sandbox = FakeStageRunner(), FakeSandbox()
 
     outcome = await _run(stage, sandbox, FakeEngine(), sample, tmp_path)

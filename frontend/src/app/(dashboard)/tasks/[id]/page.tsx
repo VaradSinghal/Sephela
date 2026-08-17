@@ -1,26 +1,31 @@
-"use client";
+'use client';
 
-import { useParams } from "next/navigation";
-import Link from "next/link";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { StatusBadge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { PageHeader } from "@/components/ui/page-header";
-import { LoadingState, ErrorState } from "@/components/ui/feedback";
-import { useJob, useCancelJob } from "@/lib/hooks/use-jobs";
-import { formatDate } from "@/lib/utils";
+import { useParams } from 'next/navigation';
+import Link from 'next/link';
+import { Card, CardContent } from '@/components/ui/card';
+import { StatusBadge, TierBadge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { PageHeader } from '@/components/ui/page-header';
+import { LoadingState, ErrorState } from '@/components/ui/feedback';
+import { StageList } from '@/components/features/stage-list';
+import { useJob, useJobStages, useCancelJob } from '@/lib/hooks/use-jobs';
+import { formatDate } from '@/lib/utils';
 
 // Task / job status page — polls live until the job reaches a terminal state.
 export default function TaskDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { data: job, isLoading, isError, error, refetch } = useJob(id);
+  const active = job?.status === 'running' || job?.status === 'queued';
+  // Stage detail carries the version, attempt count, and skip/failure reason that
+  // the inline stages on the job do not.
+  const { data: stages } = useJobStages(id, Boolean(active));
   const cancel = useCancelJob();
 
   if (isLoading) return <LoadingState label="Loading job…" />;
   if (isError || !job) return <ErrorState error={error} retry={refetch} />;
 
-  const active = job.status === "running" || job.status === "queued";
-  const done = job.status === "completed";
+  // A partial job is finished and has a report; it just did not run everything.
+  const hasReport = job.status === 'completed' || job.status === 'partial';
 
   return (
     <div>
@@ -39,7 +44,7 @@ export default function TaskDetailPage() {
                 Cancel
               </Button>
             )}
-            {done && (
+            {hasReport && (
               <Link href={`/reports/${job.job_id}`}>
                 <Button size="sm">View report</Button>
               </Link>
@@ -54,7 +59,14 @@ export default function TaskDetailPage() {
             <span className="text-sm text-muted-foreground">Status</span>
             <StatusBadge status={job.status} />
           </div>
-          <div className="flex-1 min-w-[200px]">
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">Risk</span>
+            <TierBadge tier={job.risk_tier} />
+            {job.risk_score != null && (
+              <span className="text-sm font-medium tabular-nums">{job.risk_score.toFixed(1)}</span>
+            )}
+          </div>
+          <div className="min-w-[200px] flex-1">
             <div className="mb-1 flex justify-between text-xs text-muted-foreground">
               <span>Progress</span>
               <span>{job.progress}%</span>
@@ -70,29 +82,9 @@ export default function TaskDetailPage() {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Pipeline stages</CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-2">
-          {job.stages.length === 0 && (
-            <p className="text-sm text-muted-foreground">Waiting for pipeline to start…</p>
-          )}
-          {job.stages.map((stage) => (
-            <div
-              key={stage.engine}
-              className="flex items-center justify-between rounded-md border px-3 py-2"
-            >
-              <span className="text-sm font-medium capitalize">{stage.engine.replace("_", " ")}</span>
-              <StatusBadge status={stage.status} />
-            </div>
-          ))}
-        </CardContent>
-      </Card>
+      <StageList stages={stages} fallback={job.stages} />
 
-      {job.error && (
-        <p className="mt-4 text-sm text-destructive">Error: {job.error}</p>
-      )}
+      {job.error && <p className="mt-4 text-sm text-destructive">Error: {job.error}</p>}
     </div>
   );
 }

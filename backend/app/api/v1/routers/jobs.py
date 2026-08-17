@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime
+from typing import Annotated
 
 from fastapi import APIRouter, Query, Request
 
@@ -59,6 +60,8 @@ def _to_out(job: AnalysisJob) -> JobOut:
         ],
         error=job.error,
         created_at=job.created_at,
+        risk_score=job.risk_score,
+        risk_tier=job.risk_tier,
     )
 
 
@@ -76,9 +79,15 @@ async def _require_job(
 async def list_jobs(
     session: DbSession,
     user: ViewerDep,
-    status: JobStatus | None = None,
+    status: Annotated[list[JobStatus] | None, Query()] = None,
     limit: int = Query(50, ge=1, le=200),
 ) -> JobListOut:
+    """List jobs, newest first.
+
+    ``status`` is repeatable (``?status=completed&status=partial``) because the
+    groupings a client wants are not single states — a job that skipped a stage is
+    ``partial`` and still has a report.
+    """
     jobs = await JobRepository(session).list(status=status, limit=limit, org_id=user.org_uuid)
     return JobListOut(items=[_to_out(j) for j in jobs], next_cursor=None)
 

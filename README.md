@@ -8,16 +8,35 @@ enrichment → multi-agent GenAI reasoning → explainable risk score → SOC-re
 reports.
 
 ## Status
-**Phases 1–14 implemented.** Architecture, backend, frontend, upload pipeline,
-static/code-intel/dynamic engines, GenAI reasoning, risk scoring, reporting,
-threat-intel enrichment, the RAG knowledge service, the multi-agent orchestrator, and
-production hardening are in place.
+**Phases 1–14 implemented, and all of them now reachable from a running job.**
+Architecture, backend, frontend, upload pipeline, static/code-intel/dynamic
+engines, GenAI reasoning, risk scoring, reporting, threat-intel enrichment, the RAG
+knowledge service, the multi-agent orchestrator, and production hardening are in
+place.
 
-The multi-agent stage runs six analysis agents in parallel (manifest, permission,
-code, API, network, threat-intel), fans them into risk scoring, then report
-generation — see [ai/orchestration/](ai/orchestration/). It is gated off by
-default (`SEPHELA_AI_ENABLED`) because it is the one stage that needs a paid LLM
-credential to do anything at all.
+The pipeline chain ([backend/app/tasks/pipeline.py](backend/app/tasks/pipeline.py)):
+
+```
+intake → static → code_intel → dynamic → threat_intel
+       → [ai, gated] → scoring → reporting → finalize
+```
+
+Every stage is individually flag-gated and `finalize` aggregates whatever actually
+ran, so a deployment running a subset produces a coherent `partial` job rather
+than a broken one.
+
+**Scoring and reporting need no LLM credential.** `RiskScoringEngine` is pure
+computation over findings and the reporting engine is a renderer, so they run as
+standalone stages rather than as byproducts of the AI stage. A default install
+with no model key still produces a real risk score, per-domain decomposition, and
+downloadable reports in five formats. The multi-agent stage — six agents in
+parallel over manifest, permission, code, API, network, and threat-intel, see
+[ai/orchestration/](ai/orchestration/) — layers narrative on top when enabled, and
+is gated off by default (`SEPHELA_AI_ENABLED`) because it is the one stage that
+cannot degrade without a paid credential.
+
+Dynamic analysis is also off by default (`SEPHELA_DYNAMIC_ENABLED`); it needs the
+isolated sandbox, which needs KVM.
 
 Phase 14 covers authentication and RBAC with per-tenant isolation, an append-only
 audit trail, rate limiting, Kubernetes manifests with an isolated malware-execution
@@ -32,6 +51,13 @@ from this repository alone:
 | DR RTO/RPO | Runbook complete; no game-day rehearsed, so the targets are intent rather than fact. |
 | Progressive delivery | Not implemented — rollouts are `maxUnavailable: 0` rolling updates, not canary/blue-green. |
 | Terraform, dashboards | Not started. |
+
+One known limit outside Phase 14: the static stage's decompiled JADX tree is
+handed to the code-intel stage as a **filesystem path**, so on a multi-worker
+deployment where the two stages land on different hosts, code intel finds nothing
+there and passes `None`. The engine treats the tree as optional, so this costs
+analysis depth (call-graph and control-flow analyzers degrade) and never
+correctness. A storage-backed handoff is the fix.
 
 | Component | Location |
 |---|---|
@@ -69,14 +95,27 @@ Every later phase has a reserved home in the architecture (see doc 10).
 
 ## Running it
 ```bash
-make up               # postgres, redis, qdrant, api, worker
+make up               # postgres, redis, qdrant, api, worker, frontend (:3000)
+make up-api           # backend only, no dashboard
 make migrate          # apply DB migrations
-make install-engines  # install the analysis engines into the backend venv
+make install-engines  # install all five analysis engines into the backend venv
 make install-ai       # install the GenAI subsystem (the AI stage imports `ai`)
 make test             # backend tests
 make test-engines     # each engine's own suite
 make test-ai          # multi-agent, GenAI, scoring, and RAG suites
 ```
+
+The dashboard runs at http://localhost:3000 and proxies `/api/*` to the API
+through a Next rewrite, so the browser stays same-origin and there is no CORS
+configuration to get wrong. To run it outside compose: `cd frontend && npm install
+&& npm run dev` (set `BACKEND_URL` if the API is not on `localhost:8000`).
+
+Uploading an APK on a stock install — no LLM key, no sandbox — walks
+`static → code_intel → threat_intel → scoring → reporting` and lands on a report
+with a score, its per-domain decomposition, findings ranked by severity and each
+expandable to its provenance, and downloads in JSON, Markdown, HTML, and SARIF
+(PDF additionally needs `weasyprint`; without it that one format is reported as
+missing rather than failing the stage).
 
 `make install-ai` is not optional for the backend suite: `app.tasks.ai` imports the
 `ai` package, so collection fails without it.

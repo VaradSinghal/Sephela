@@ -1,9 +1,9 @@
-"use client";
+'use client';
 
-import { useMutation, useQuery } from "@tanstack/react-query";
-import { useRouter } from "next/navigation";
-import { authApi } from "@/lib/api/endpoints";
-import { useAuthStore } from "@/lib/state/auth-store";
+import { useMutation, useQuery } from '@tanstack/react-query';
+import { useRouter } from 'next/navigation';
+import { authApi } from '@/lib/api/endpoints';
+import { useAuthStore } from '@/lib/state/auth-store';
 
 export function useLogin() {
   const router = useRouter();
@@ -12,8 +12,8 @@ export function useLogin() {
     mutationFn: (vars: { email: string; password: string }) =>
       authApi.login(vars.email, vars.password),
     onSuccess: (token) => {
-      setAuth(token.access_token);
-      router.push("/dashboard");
+      setAuth(token.access_token, token.refresh_token);
+      router.push('/dashboard');
     },
   });
 }
@@ -21,7 +21,7 @@ export function useLogin() {
 export function useCurrentUser() {
   const token = useAuthStore((s) => s.token);
   return useQuery({
-    queryKey: ["me"],
+    queryKey: ['me'],
     queryFn: authApi.me,
     enabled: Boolean(token),
   });
@@ -32,6 +32,6 @@ export function useLogout() {
   const logout = useAuthStore((s) => s.logout);
   return () => {
     logout();
-    router.push("/login");
+    router.push('/login');
   };
 }

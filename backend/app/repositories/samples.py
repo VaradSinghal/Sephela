@@ -63,17 +63,26 @@ class JobRepository:
     async def list(
         self,
         *,
-        status: JobStatus | None = None,
+        status: JobStatus | list[JobStatus] | None = None,
         limit: int = 50,
         org_id: uuid.UUID | None = None,
     ) -> list[AnalysisJob]:
+        """List jobs, newest first.
+
+        ``status`` accepts a list because the useful groupings are not single
+        states: "has a report" is ``completed`` *or* ``partial``, since a job that
+        skipped a stage still produced one.
+        """
         stmt = (
             select(AnalysisJob)
             .options(selectinload(AnalysisJob.stages))
             .order_by(AnalysisJob.created_at.desc())
             .limit(limit)
         )
-        if status is not None:
+        if isinstance(status, list):
+            if status:
+                stmt = stmt.where(AnalysisJob.status.in_(status))
+        elif status is not None:
             stmt = stmt.where(AnalysisJob.status == status)
         if org_id is not None:
             stmt = stmt.where(AnalysisJob.org_id == org_id)

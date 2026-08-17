@@ -22,12 +22,20 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY backend/pyproject.toml ./
 RUN pip install --upgrade pip && pip install .
 
-# Analysis engines are separate distributions consumed by worker stages. Each is
-# pure-Python (pydantic only), so this stays a cheap layer.
+# Analysis engines are separate distributions consumed by worker stages. All five
+# are installed because every one of them now has a stage in the pipeline chain —
+# a missing install surfaces as a failed stage with a clear message rather than a
+# crash, which makes it exactly the kind of gap that survives unnoticed.
+COPY engines/static /opt/engines/static
+RUN pip install /opt/engines/static
+COPY engines/code_intel /opt/engines/code_intel
+RUN pip install /opt/engines/code_intel
 COPY engines/dynamic /opt/engines/dynamic
 RUN pip install /opt/engines/dynamic
 COPY engines/threat_intel /opt/engines/threat_intel
 RUN pip install /opt/engines/threat_intel
+COPY engines/reporting /opt/engines/reporting
+RUN pip install /opt/engines/reporting
 
 # The GenAI subsystem is NOT optional for this image, despite only the AI stage
 # using it: app/tasks/pipeline.py imports app.tasks.ai at module scope, and the API

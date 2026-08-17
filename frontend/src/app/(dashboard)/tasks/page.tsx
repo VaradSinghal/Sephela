@@ -1,5 +1,5 @@
-import { PageHeader } from "@/components/ui/page-header";
-import { JobList } from "@/components/features/job-list";
+import { PageHeader } from '@/components/ui/page-header';
+import { JobList } from '@/components/features/job-list';
 
 export default function TasksPage() {
   return (

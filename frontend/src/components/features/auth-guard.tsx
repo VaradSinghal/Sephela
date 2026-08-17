@@ -1,13 +1,13 @@
-"use client";
+'use client';
 
 // Client-side route guard for the dashboard group. Redirects to /login when no
 // token is present. (Belt-and-suspenders: the API also enforces auth; a later
 // phase can add middleware-based SSR protection.)
 
-import { useEffect, useState, type ReactNode } from "react";
-import { useRouter } from "next/navigation";
-import { useAuthStore } from "@/lib/state/auth-store";
-import { LoadingState } from "@/components/ui/feedback";
+import { useEffect, useState, type ReactNode } from 'react';
+import { useRouter } from 'next/navigation';
+import { useAuthStore } from '@/lib/state/auth-store';
+import { LoadingState } from '@/components/ui/feedback';
 
 export function AuthGuard({ children }: { children: ReactNode }) {
   const router = useRouter();
@@ -16,7 +16,7 @@ export function AuthGuard({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!token) {
-      router.replace("/login");
+      router.replace('/login');
     } else {
       setChecked(true);
     }

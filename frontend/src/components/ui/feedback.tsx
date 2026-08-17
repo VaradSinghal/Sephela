@@ -1,16 +1,16 @@
 // Shared loading / error / empty states — used across every data view so the
 // dashboard has consistent async UX (docs requirement: loading + error states).
 
-import { AlertCircle, Inbox, Loader2 } from "lucide-react";
-import type { ReactNode } from "react";
-import { ApiError } from "@/lib/api/client";
-import { cn } from "@/lib/utils";
+import { AlertCircle, Inbox, Loader2 } from 'lucide-react';
+import type { ReactNode } from 'react';
+import { ApiError } from '@/lib/api/client';
+import { cn } from '@/lib/utils';
 
 export function Spinner({ className }: { className?: string }) {
-  return <Loader2 className={cn("h-5 w-5 animate-spin text-muted-foreground", className)} />;
+  return <Loader2 className={cn('h-5 w-5 animate-spin text-muted-foreground', className)} />;
 }
 
-export function LoadingState({ label = "Loading…" }: { label?: string }) {
+export function LoadingState({ label = 'Loading…' }: { label?: string }) {
   return (
     <div className="flex items-center justify-center gap-2 py-16 text-muted-foreground">
       <Spinner />
@@ -25,7 +25,7 @@ export function ErrorState({ error, retry }: { error: unknown; retry?: () => voi
       ? error.message
       : error instanceof Error
         ? error.message
-        : "Something went wrong.";
+        : 'Something went wrong.';
   const traceId = error instanceof ApiError ? error.traceId : null;
 
   return (

@@ -29,6 +29,7 @@ from app.core.config import settings
 from app.core.logging import get_logger
 from app.db.models.analysis import AnalysisJob, JobStatus, Sample, StageStatus
 from app.db.session import AsyncSessionLocal
+from app.services.samples import materialize_apk
 from app.services.sandbox import (
     SandboxDisabledError,
     SandboxError,
@@ -36,8 +37,6 @@ from app.services.sandbox import (
     job_artifacts_dir,
 )
 from app.services.stages import StageOutcome, StageRunner
-from app.storage.base import StorageBackend
-from app.storage.local import LocalStorage
 from app.tasks.celery_app import celery_app
 
 logger = get_logger(__name__)
@@ -65,24 +64,6 @@ def _engine() -> tuple[Any, str]:
             "(pip install -e engines/dynamic)."
         ) from exc
     return sephela_dynamic, ENGINE_VERSION
-
-
-def _storage() -> StorageBackend:
-    # Mirrors app.api.deps; S3 lands with its phase.
-    return LocalStorage(settings.storage_local_root)
-
-
-async def _materialize_apk(sample: Sample, dest_dir: Path) -> Path:
-    """Copy the APK out of object storage into the sandbox's input directory.
-
-    The sandbox bind-mounts this directory read-only, so the APK gets its own
-    per-job dir — never the shared storage root.
-    """
-    dest_dir.mkdir(parents=True, exist_ok=True)
-    apk_path = dest_dir / f"{sample.sha256}.apk"
-    data = await _storage().load(StorageBackend.sample_key(sample.sha256))
-    await asyncio.to_thread(apk_path.write_bytes, data)
-    return apk_path
 
 
 async def _run(job_id: str) -> str:
@@ -157,7 +138,7 @@ async def _execute(
         return await stage.skip(runner.unavailable_reason())
 
     try:
-        apk_path = await _materialize_apk(sample, input_dir)
+        apk_path = await materialize_apk(sample, input_dir)
     except FileNotFoundError as exc:
         await stage.begin()
         return await stage.fail(f"APK bytes missing from storage: {exc}")

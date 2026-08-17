@@ -125,14 +125,27 @@ class Settings(BaseSettings):
     # verdicts more often (costs quota); raise it to stretch a small quota.
     threat_intel_cache_ttl_factor: float = 1.0
 
+    # ---- Engine workspace (static/code-intel scratch space) ----
+    # Where engines that need the sample on disk unpack it. Separate from
+    # dynamic_artifacts_root, which the sandbox owns and wipes.
+    engine_workspace_root: str = "./data/workspace"
+    # Keep decompiled trees after a run for debugging; disable in prod (they are
+    # derived from a malware sample).
+    keep_engine_artifacts: bool = False
+
     # ---- Feature flags (Phase-gated capabilities) ----
-    # Toggle each capability per environment. All default to False so a fresh
-    # deployment starts safe; enable progressively as each phase lands.
+    # Toggle each capability per environment.
+    #
+    # The default-on stages are the ones that need no external credential and no
+    # sandbox: static extraction, code intelligence, and the two deterministic
+    # stages that turn findings into a score and a report. ai_enabled is the
+    # exception — it is the only stage that cannot run without a paid LLM key, so
+    # it would fail every job on a fresh deployment rather than degrade.
     static_enabled: bool = True
     code_intel_enabled: bool = True
     ai_enabled: bool = False
-    scoring_enabled: bool = False
-    reporting_enabled: bool = False
+    scoring_enabled: bool = True
+    reporting_enabled: bool = True
     rag_enabled: bool = False
     multi_agent_enabled: bool = False
 

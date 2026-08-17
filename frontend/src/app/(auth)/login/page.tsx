@@ -1,14 +1,14 @@
-"use client";
+'use client';
 
-import { useState, type FormEvent } from "react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { useLogin } from "@/lib/hooks/use-auth";
+import { useState, type FormEvent } from 'react';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { useLogin } from '@/lib/hooks/use-auth';
 
 export default function LoginPage() {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const login = useLogin();
 
   const onSubmit = (e: FormEvent) => {
@@ -51,7 +51,7 @@ export default function LoginPage() {
           </div>
           {login.isError && (
             <p className="text-sm text-destructive">
-              {login.error instanceof Error ? login.error.message : "Login failed."}
+              {login.error instanceof Error ? login.error.message : 'Login failed.'}
             </p>
           )}
           <Button type="submit" loading={login.isPending} className="w-full">

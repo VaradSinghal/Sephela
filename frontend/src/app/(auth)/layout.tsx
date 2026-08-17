@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { ReactNode } from 'react';
 
 // Centered, minimal shell for unauthenticated pages.
 export default function AuthLayout({ children }: { children: ReactNode }) {

@@ -33,3 +33,14 @@ class StorageBackend(ABC):
     def sample_key(sha256: str) -> str:
         """Sharded key for a sample by its hash (avoids huge flat dirs)."""
         return f"samples/{sha256[:2]}/{sha256[2:4]}/{sha256}.apk"
+
+    @staticmethod
+    def report_key(job_id: str, filename: str) -> str:
+        """Sharded key for a rendered report artifact of a job.
+
+        Keyed by job rather than by content hash: two runs of the same sample are
+        different jobs and must keep their own reports, since the analysis (and
+        therefore the score) can legitimately differ between them.
+        """
+        jid = str(job_id)
+        return f"reports/{jid[:2]}/{jid}/{filename}"

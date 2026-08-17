@@ -1,15 +1,25 @@
-"use client";
+'use client';
 
-import Link from "next/link";
-import { Card, CardContent } from "@/components/ui/card";
-import { StatusBadge } from "@/components/ui/badge";
-import { LoadingState, ErrorState, EmptyState } from "@/components/ui/feedback";
-import { useJobs } from "@/lib/hooks/use-jobs";
-import { formatDate } from "@/lib/utils";
+import Link from 'next/link';
+import { Card, CardContent } from '@/components/ui/card';
+import { StatusBadge, TierBadge } from '@/components/ui/badge';
+import { LoadingState, ErrorState, EmptyState } from '@/components/ui/feedback';
+import { useJobs } from '@/lib/hooks/use-jobs';
+import { formatDate } from '@/lib/utils';
 
 // Reusable list of analysis jobs, linking to their status page. Shared by the
 // Tasks and Reports views (Reports filters to completed).
-export function JobList({ status, hrefBase = "/tasks" }: { status?: string; hrefBase?: string }) {
+export function JobList({
+  status,
+  hrefBase = '/tasks',
+  emptyTitle = 'No analyses yet',
+  emptyDescription = 'Upload an APK to get started.',
+}: {
+  status?: string | string[];
+  hrefBase?: string;
+  emptyTitle?: string;
+  emptyDescription?: string;
+}) {
   const { data, isLoading, isError, error, refetch } = useJobs(status);
 
   if (isLoading) return <LoadingState />;
@@ -17,7 +27,7 @@ export function JobList({ status, hrefBase = "/tasks" }: { status?: string; href
 
   const jobs = data?.items ?? [];
   if (jobs.length === 0) {
-    return <EmptyState title="No analyses yet" description="Upload an APK to get started." />;
+    return <EmptyState title={emptyTitle} description={emptyDescription} />;
   }
 
   return (
@@ -31,6 +41,12 @@ export function JobList({ status, hrefBase = "/tasks" }: { status?: string; href
                 <p className="text-xs text-muted-foreground">{formatDate(job.created_at)}</p>
               </div>
               <div className="flex items-center gap-3">
+                {job.risk_score != null && (
+                  <span className="text-sm font-medium tabular-nums">
+                    {job.risk_score.toFixed(1)}
+                  </span>
+                )}
+                <TierBadge tier={job.risk_tier} />
                 <span className="text-sm text-muted-foreground">{job.progress}%</span>
                 <StatusBadge status={job.status} />
               </div>

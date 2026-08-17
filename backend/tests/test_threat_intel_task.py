@@ -281,13 +281,33 @@ class TestProviderConfiguration:
         assert "otx" not in names
 
 
+# Every stage the pipeline can dispatch, so a wiring test can isolate the one it
+# is about. Listing them explicitly means a newly added stage breaks these tests
+# loudly rather than quietly appearing in every assertion.
+_STAGE_FLAGS = (
+    "static_enabled",
+    "code_intel_enabled",
+    "dynamic_enabled",
+    "threat_intel_enabled",
+    "ai_enabled",
+    "scoring_enabled",
+    "reporting_enabled",
+)
+
+
+def _only(monkeypatch, *enabled: str) -> None:
+    """Turn every stage off, then re-enable the named ones."""
+    from app.tasks import pipeline
+
+    for flag in _STAGE_FLAGS:
+        monkeypatch.setattr(pipeline.settings, flag, flag in enabled)
+
+
 class TestPipelineWiring:
     def test_the_stage_is_dispatched_when_enabled(self, monkeypatch) -> None:
         from app.tasks import pipeline
 
-        monkeypatch.setattr(pipeline.settings, "dynamic_enabled", False)
-        monkeypatch.setattr(pipeline.settings, "threat_intel_enabled", True)
-        monkeypatch.setattr(pipeline.settings, "ai_enabled", False)
+        _only(monkeypatch, "threat_intel_enabled")
 
         dispatched: list[Any] = []
         monkeypatch.setattr(pipeline, "chain", lambda *sigs: _FakeChain(sigs, dispatched))
@@ -301,9 +321,7 @@ class TestPipelineWiring:
     def test_the_stage_is_omitted_when_disabled(self, monkeypatch) -> None:
         from app.tasks import pipeline
 
-        monkeypatch.setattr(pipeline.settings, "dynamic_enabled", False)
-        monkeypatch.setattr(pipeline.settings, "threat_intel_enabled", False)
-        monkeypatch.setattr(pipeline.settings, "ai_enabled", False)
+        _only(monkeypatch)
 
         dispatched: list[Any] = []
         monkeypatch.setattr(pipeline, "chain", lambda *sigs: _FakeChain(sigs, dispatched))
@@ -318,9 +336,7 @@ class TestPipelineWiring:
         # deployment with no LLM key must not have it dispatched at all.
         from app.tasks import pipeline
 
-        monkeypatch.setattr(pipeline.settings, "dynamic_enabled", False)
-        monkeypatch.setattr(pipeline.settings, "threat_intel_enabled", False)
-        monkeypatch.setattr(pipeline.settings, "ai_enabled", False)
+        _only(monkeypatch)
 
         dispatched: list[Any] = []
         monkeypatch.setattr(pipeline, "chain", lambda *sigs: _FakeChain(sigs, dispatched))
@@ -335,9 +351,7 @@ class TestPipelineWiring:
         # in the envelope before the AI stage reads it.
         from app.tasks import pipeline
 
-        monkeypatch.setattr(pipeline.settings, "dynamic_enabled", False)
-        monkeypatch.setattr(pipeline.settings, "threat_intel_enabled", True)
-        monkeypatch.setattr(pipeline.settings, "ai_enabled", True)
+        _only(monkeypatch, "threat_intel_enabled", "ai_enabled")
 
         dispatched: list[Any] = []
         monkeypatch.setattr(pipeline, "chain", lambda *sigs: _FakeChain(sigs, dispatched))
@@ -352,8 +366,7 @@ class TestPipelineWiring:
         # It enriches what the analysis engines produced, so it must come later.
         from app.tasks import pipeline
 
-        monkeypatch.setattr(pipeline.settings, "dynamic_enabled", True)
-        monkeypatch.setattr(pipeline.settings, "threat_intel_enabled", True)
+        _only(monkeypatch, "dynamic_enabled", "threat_intel_enabled")
 
         dispatched: list[Any] = []
         monkeypatch.setattr(pipeline, "chain", lambda *sigs: _FakeChain(sigs, dispatched))

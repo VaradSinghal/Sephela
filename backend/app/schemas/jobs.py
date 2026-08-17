@@ -37,6 +37,10 @@ class JobOut(BaseModel):
     stages: list[StageOut]
     error: str | None = None
     created_at: datetime
+    # Null until the scoring stage runs. Distinct from a score of 0.0 — clients
+    # must render "not scored" rather than "benign" for an unscored job.
+    risk_score: float | None = None
+    risk_tier: str | None = None
 
 
 class JobListOut(BaseModel):

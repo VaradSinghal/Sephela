@@ -1,13 +1,13 @@
-"use client";
+'use client';
 
-import { useRef, useState, type DragEvent } from "react";
-import { useRouter } from "next/navigation";
-import { UploadCloud } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { PageHeader } from "@/components/ui/page-header";
-import { useUpload } from "@/lib/hooks/use-jobs";
-import { cn } from "@/lib/utils";
+import { useRef, useState, type DragEvent } from 'react';
+import { useRouter } from 'next/navigation';
+import { UploadCloud } from 'lucide-react';
+import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { PageHeader } from '@/components/ui/page-header';
+import { useUpload } from '@/lib/hooks/use-jobs';
+import { cn } from '@/lib/utils';
 
 export default function UploadPage() {
   const router = useRouter();
@@ -17,7 +17,7 @@ export default function UploadPage() {
   const [file, setFile] = useState<File | null>(null);
 
   const pick = (f: File | null) => {
-    if (f && (f.name.endsWith(".apk") || f.name.endsWith(".xapk"))) setFile(f);
+    if (f && (f.name.endsWith('.apk') || f.name.endsWith('.xapk'))) setFile(f);
   };
 
   const onDrop = (e: DragEvent) => {
@@ -48,13 +48,15 @@ export default function UploadPage() {
             onDrop={onDrop}
             onClick={() => inputRef.current?.click()}
             className={cn(
-              "flex cursor-pointer flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed p-10 text-center transition-colors",
-              dragging ? "border-primary bg-muted/50" : "border-input",
+              'flex cursor-pointer flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed p-10 text-center transition-colors',
+              dragging ? 'border-primary bg-muted/50' : 'border-input',
             )}
           >
             <UploadCloud className="h-10 w-10 text-muted-foreground" />
             <div>
-              <p className="font-medium">{file ? file.name : "Drop an APK here or click to browse"}</p>
+              <p className="font-medium">
+                {file ? file.name : 'Drop an APK here or click to browse'}
+              </p>
               <p className="text-sm text-muted-foreground">.apk / .xapk files</p>
             </div>
             <input
@@ -68,7 +70,7 @@ export default function UploadPage() {
 
           {upload.isError && (
             <p className="mt-4 text-sm text-destructive">
-              {upload.error instanceof Error ? upload.error.message : "Upload failed."}
+              {upload.error instanceof Error ? upload.error.message : 'Upload failed.'}
             </p>
           )}
 

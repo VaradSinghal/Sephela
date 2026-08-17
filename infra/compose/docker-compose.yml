@@ -90,6 +90,27 @@ services:
       --loglevel=INFO
       --queues=intake,static,code_intel,ai,dynamic,threat_intel,scoring,reporting,notify
 
+  frontend:
+    # Dev server rather than a production build: this compose file is the local
+    # stack, and the dashboard is the surface you iterate on most.
+    image: node:20-alpine
+    working_dir: /app
+    environment:
+      # The Next rewrite proxies /api/* here, so the browser stays same-origin and
+      # no CORS configuration is needed (see frontend/next.config.mjs).
+      BACKEND_URL: http://api:8000
+    volumes:
+      - ../../frontend:/app
+      - frontend_node_modules:/app/node_modules
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+    command: sh -c "npm install && npm run dev"
+
 volumes:
   pgdata:
   qdrantdata:
+  # Kept out of the bind mount so the container's install does not fight a host
+  # node_modules built for a different platform.
+  frontend_node_modules:

@@ -45,6 +45,10 @@ class AuditAction(str, enum.Enum):
     token_refreshed = "token.refreshed"
     sample_uploaded = "sample.uploaded"
     evidence_accessed = "evidence.accessed"
+    # A report leaving the platform as a file is the point at which analysis
+    # becomes something forwarded to a regulator or a third party, so the export
+    # is recorded even though reading the report in-app is not.
+    report_downloaded = "report.downloaded"
     job_cancelled = "job.cancelled"
     access_denied = "access.denied"
 

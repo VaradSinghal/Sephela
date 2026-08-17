@@ -9,24 +9,40 @@ Current shape (docs/architecture/05-messaging.md):
 
     intake (validate/hash/dedup/persist — done in the API)
       └─ chain:
-           dynamic_analysis      (Phase 10, policy-gated)
+           static                (Phase 5, manifest/permissions/certs/strings/smali)
+           → code_intel          (Phase 6, behavioural analysis over static evidence)
+           → dynamic_analysis    (Phase 10, policy-gated sandbox run)
            → threat_intel        (Phase 11, enriches whatever evidence exists)
-           → ai                  (Phase 13, multi-agent reasoning over all evidence)
+           → ai                  (Phase 13, multi-agent reasoning; policy-gated)
+           → scoring             (Phase 8, deterministic risk score over findings)
+           → reporting           (Phase 9, renders the SOC-ready artifacts)
            → finalize            (aggregate stage statuses → job status)
 
-Stages for static, code_intel, scoring, and reporting slot in between as their
-phases land; ``finalize`` already aggregates whatever ran.
+Every stage is individually flag-gated and ``finalize`` aggregates whatever
+actually ran, so a deployment running three of them yields a coherent ``partial``
+job rather than a broken one.
 
-Threat-intel is sequenced *after* the analysis engines because it enriches the
-indicators they produce — it has nothing to work with until they have run. The
-messaging design pairs it in a parallel group with AI analysis (both consume
-evidence and neither feeds the other); it is chained here so the AI stage sees
-threat-intel verdicts in the same envelope its agents reason over, and moving to
-``group()`` is a one-line change that needs no modification to either task.
+The order is a dependency order. Code intel reads the static engine's envelope,
+so it cannot precede it. Threat-intel is sequenced *after* the analysis engines
+because it enriches the indicators they produce — it has nothing to work with
+until they have run. Scoring and reporting come last because they consume
+everything above them.
 
-The AI stage is gated on ``ai_enabled`` because it is the one stage that cannot
-run without a paid credential — with no LLM key configured it would fail every
-job rather than degrade, so a fresh deployment leaves it off.
+Two properties are worth stating because they are easy to lose in a refactor.
+
+*The AI stage is optional, and nothing downstream depends on it.* It is gated on
+``ai_enabled`` because it is the one stage that cannot run without a paid
+credential — with no LLM key configured it would fail every job rather than
+degrade, so a fresh deployment leaves it off. Scoring and reporting are therefore
+deliberately not AI byproducts: ``RiskScoringEngine`` is pure computation over
+findings and the reporting engine is a renderer, so a deployment with no model
+credential still produces a score and a downloadable report. Folding either back
+into the AI stage would make the platform's central output hostage to a vendor key.
+
+*Threat-intel and AI are logically parallel.* The messaging design pairs them in a
+group (both consume evidence, neither feeds the other); they are chained here so
+the AI stage sees threat-intel verdicts in the same envelope its agents reason
+over. Moving to ``group()`` needs no modification to either task.
 
 Every task is DB-driven and never trusts the previous message payload beyond the
 job id, so runs are safe to retry and resume.
@@ -48,7 +64,11 @@ from app.db.models.analysis import AnalysisJob, JobStatus, StageRun, StageStatus
 from app.db.session import AsyncSessionLocal
 from app.tasks.ai import analyze_ai
 from app.tasks.celery_app import celery_app
+from app.tasks.code_intel import analyze_code_intel
 from app.tasks.dynamic import analyze_dynamic
+from app.tasks.reporting import analyze_reporting
+from app.tasks.scoring import analyze_scoring
+from app.tasks.static import analyze_static
 from app.tasks.threat_intel import analyze_threat_intel
 
 logger = get_logger(__name__)
@@ -154,22 +174,33 @@ def analyze(self, job_id: str) -> str:  # type: ignore[no-untyped-def]
 
     # Immutable signatures (.si) — each stage re-reads state from the DB rather
     # than consuming the previous task's return value.
-    stages = []
-    if settings.dynamic_enabled:
-        stages.append(analyze_dynamic.si(job_id))
-    if settings.threat_intel_enabled:
-        stages.append(analyze_threat_intel.si(job_id))
-    if settings.ai_enabled:
-        stages.append(analyze_ai.si(job_id))
+    #
+    # Order is a dependency order, not a preference: code intel reads the static
+    # envelope, threat intel enriches the indicators the analysis engines found,
+    # and scoring and reporting consume everything above them.
+    enabled = (
+        (settings.static_enabled, analyze_static),
+        (settings.code_intel_enabled, analyze_code_intel),
+        (settings.dynamic_enabled, analyze_dynamic),
+        (settings.threat_intel_enabled, analyze_threat_intel),
+        (settings.ai_enabled, analyze_ai),
+        (settings.scoring_enabled, analyze_scoring),
+        (settings.reporting_enabled, analyze_reporting),
+    )
+    stages = [task.si(job_id) for flag, task in enabled if flag]
     stages.append(finalize.si(job_id))
 
     chain(*stages).apply_async()
     logger.info(
         "pipeline_dispatched",
         job_id=job_id,
+        static=settings.static_enabled,
+        code_intel=settings.code_intel_enabled,
         dynamic=settings.dynamic_enabled,
         threat_intel=settings.threat_intel_enabled,
         ai=settings.ai_enabled,
+        scoring=settings.scoring_enabled,
+        reporting=settings.reporting_enabled,
     )
     return JobStatus.running.value
 

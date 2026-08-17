@@ -1,12 +1,12 @@
-"use client";
+'use client';
 
-import Link from "next/link";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { PageHeader } from "@/components/ui/page-header";
-import { LoadingState, ErrorState } from "@/components/ui/feedback";
-import { Button } from "@/components/ui/button";
-import { useJobs } from "@/lib/hooks/use-jobs";
-import type { Job } from "@/lib/api/types";
+import Link from 'next/link';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { PageHeader } from '@/components/ui/page-header';
+import { LoadingState, ErrorState } from '@/components/ui/feedback';
+import { Button } from '@/components/ui/button';
+import { useJobs } from '@/lib/hooks/use-jobs';
+import type { Job } from '@/lib/api/types';
 
 function StatCard({ label, value }: { label: string; value: number | string }) {
   return (
@@ -25,9 +25,9 @@ export default function DashboardPage() {
   const { data, isLoading, isError, error, refetch } = useJobs();
 
   const jobs: Job[] = data?.items ?? [];
-  const running = jobs.filter((j) => j.status === "running" || j.status === "queued").length;
-  const completed = jobs.filter((j) => j.status === "completed").length;
-  const failed = jobs.filter((j) => j.status === "failed").length;
+  const running = jobs.filter((j) => j.status === 'running' || j.status === 'queued').length;
+  const completed = jobs.filter((j) => j.status === 'completed').length;
+  const failed = jobs.filter((j) => j.status === 'failed').length;
 
   return (
     <div>

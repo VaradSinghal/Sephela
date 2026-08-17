@@ -1,7 +1,7 @@
-import type { ReactNode } from "react";
-import { AuthGuard } from "@/components/features/auth-guard";
-import { Sidebar } from "@/components/features/sidebar";
-import { Topbar } from "@/components/features/topbar";
+import type { ReactNode } from 'react';
+import { AuthGuard } from '@/components/features/auth-guard';
+import { Sidebar } from '@/components/features/sidebar';
+import { Topbar } from '@/components/features/topbar';
 
 // Responsive dashboard shell: sidebar collapses on small screens.
 export default function DashboardLayout({ children }: { children: ReactNode }) {

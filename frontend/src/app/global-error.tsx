@@ -1,6 +1,6 @@
-"use client";
+'use client';
 
-import { Button } from "@/components/ui/button";
+import { Button } from '@/components/ui/button';
 
 // Top-level error boundary (docs requirement: error handling).
 export default function GlobalError({
