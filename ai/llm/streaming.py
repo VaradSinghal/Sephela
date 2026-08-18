@@ -6,7 +6,7 @@ import contextlib
 import json
 from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 from ai.llm.client import LLMResponse, StreamingChunk
@@ -19,7 +19,7 @@ class StreamingState:
     chunks: list[StreamingChunk] = field(default_factory=list)
     full_content: str = ""
     total_tokens: int = 0
-    started_at: datetime = field(default_factory=datetime.utcnow)
+    started_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     completed_at: datetime | None = None
     is_complete: bool = False
     error: str | None = None
@@ -63,7 +63,7 @@ class StreamingHandler:
                 if chunk.is_final:
                     break
 
-            self.state.completed_at = datetime.utcnow()
+            self.state.completed_at = datetime.now(UTC)
             self.state.is_complete = True
 
             response = LLMResponse(
@@ -195,7 +195,7 @@ class StructuredStreamingHandler(StreamingHandler):
                 if chunk.is_final:
                     break
 
-            self.state.completed_at = datetime.utcnow()
+            self.state.completed_at = datetime.now(UTC)
             self.state.is_complete = True
 
             # Validate against schema if we have parsed objects

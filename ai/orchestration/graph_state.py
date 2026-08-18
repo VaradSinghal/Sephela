@@ -9,7 +9,7 @@ for dicts) so parallel branches can write without trampling each other.
 from __future__ import annotations
 
 import operator
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Annotated, Any
 from uuid import uuid4
@@ -191,7 +191,7 @@ def initial_state(
         pipeline_status=PipelineStatus.PENDING.value,
         error=None,
         errors=[],
-        started_at=datetime.utcnow().isoformat() + "Z",
+        started_at=datetime.now(UTC).isoformat(),
         completed_at=None,
         trace_id=trace_id or uuid4().hex,
         otel_context={},

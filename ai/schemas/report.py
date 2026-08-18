@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
 
@@ -83,7 +83,7 @@ class AnalysisReport(BaseModel):
     report_id: str
     job_id: str
     sample_sha256: str
-    generated_at: datetime = Field(default_factory=datetime.utcnow)
+    generated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     generated_by: str = "Sephela AI Analysis Pipeline"
     version: str = "1.0"
     format: ReportFormat = ReportFormat.json

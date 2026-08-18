@@ -46,6 +46,19 @@ architecture, not a layer. Threat model below (STRIDE-oriented) + controls.
   from the `users` row on every request, never from a claim. A signed token asserting
   `role: admin` on another tenant is inert, and deactivating a user takes effect on
   their next request rather than when their token expires.
+- **PyJWT, not python-jose**, for signing. python-jose pulls `ecdsa`, whose Minerva
+  timing-attack advisory (PYSEC-2026-1325) upstream declines to fix as out of scope,
+  and it has had no release since 3.3.0 (2021). PyJWT signs through `cryptography` and
+  needs neither `ecdsa` nor `rsa`, so the dependency is gone rather than waived. The
+  `pip-audit` gate still carries a documented `--ignore-vuln` for that ID as a net
+  against a stale environment; it is inert once the environment resolves correctly and
+  is due for removal after the migration is confirmed in staging.
+- **Signing-key strength is enforced at boot, not documented and hoped for.**
+  `assert_production_ready` rejects the known placeholder *and* any `HS*` key under 32
+  bytes (RFC 7518 §3.2 — an HMAC key must be at least the hash output size). A short
+  key is not a recognisable default, so an equality check cannot catch it: it signs
+  tokens that verify perfectly while being brute-forceable. `local` stays exempt so the
+  test suite and laptop stacks do not push anyone into deleting the check.
 - **RBAC** as an ordered ladder (`viewer < analyst < admin`): viewers read status and
   findings; analyst+ is required to upload, cancel, or read raw evidence envelopes
   (which carry decompiled strings and captured traffic from live malware); admin

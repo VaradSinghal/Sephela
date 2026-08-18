@@ -212,6 +212,12 @@ _INSECURE_DEFAULTS = {
     "postgres_password": "sephela",
 }
 
+# RFC 7518 §3.2: an HMAC key must be at least the hash output size — 32 bytes for
+# HS256. Shorter keys still sign and verify, so this is the same class of silent
+# footgun as the placeholders above: nothing looks broken until someone brute-forces
+# the key. .env.example already asks for 32+; this is what makes it a requirement.
+_MIN_HMAC_KEY_BYTES = 32
+
 
 def assert_production_ready(config: Settings) -> None:
     """Refuse to run a deployed environment on placeholder secrets.
@@ -239,6 +245,20 @@ def assert_production_ready(config: Settings) -> None:
             f"Refusing to start in env='{config.env}' with default "
             f"{', '.join(sorted(offenders))}. Supply real secrets."
         )
+
+    # A non-default but too-short key passes the check above and still weakens every
+    # token: `SEPHELA_SECRET_KEY=hunter2` is not a placeholder, just inadequate.
+    # Only HS* uses secret_key as raw HMAC material; RS*/ES* carry a PEM instead.
+    if config.algorithm.startswith("HS"):
+        key_bytes = len(config.secret_key.encode())
+        if key_bytes < _MIN_HMAC_KEY_BYTES:
+            from app.core.exceptions import ConfigurationError
+
+            raise ConfigurationError(
+                f"Refusing to start in env='{config.env}': secret_key is {key_bytes} "
+                f"bytes, below the {_MIN_HMAC_KEY_BYTES} required for "
+                f"{config.algorithm} (RFC 7518 §3.2). Supply a longer secret."
+            )
 
 
 @lru_cache

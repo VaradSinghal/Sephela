@@ -14,7 +14,14 @@ dependencies = [
     "celery[redis]>=5.4",
     "redis>=5.0",
     "structlog>=24.1",
-    "python-jose[cryptography]>=3.3",
+    # PyJWT, not python-jose: python-jose pulls `ecdsa`, which carries an
+    # unfixable Minerva timing CVE (PYSEC-2026-1325) that upstream considers out
+    # of scope, and python-jose itself has been unreleased since 3.3.0 (2021).
+    # PyJWT signs via `cryptography` and needs neither `ecdsa` nor `rsa`.
+    "pyjwt[crypto]>=2.8",
+    # Security floor on a transitive dep, which is not otherwise expressible.
+    # cryptography < 50.0.0 -> PYSEC-2026-3552. `make security-scan` gates on it.
+    "cryptography>=50.0.0",
     # bcrypt directly rather than via passlib: passlib 1.7.4 (2020) reads
     # bcrypt.__about__ during backend detection, which bcrypt >= 4.1 removed, so the
     # combination raises on every hash. passlib is unmaintained; bcrypt is the actual

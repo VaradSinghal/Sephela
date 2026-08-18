@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 from ai.agents.base import AgentConfig, BaseAgent
@@ -59,7 +59,7 @@ Output must conform to ReportGenerationResult schema."""
 === JOB INFO ===
 Job ID: {job_id}
 Sample SHA256: {sample_sha256}
-Generated: {datetime.utcnow().isoformat()}Z
+Generated: {datetime.now(UTC).isoformat()}
 
 === RISK ASSESSMENT ===
 Score: {risk_output.get("score", "N/A")}

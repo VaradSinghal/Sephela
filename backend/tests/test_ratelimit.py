@@ -109,7 +109,7 @@ class TestPrincipalKey:
     def test_an_unsigned_token_cannot_choose_its_own_bucket(self) -> None:
         # The subject is only trusted after signature verification; otherwise a
         # client edits `sub` to get a fresh allowance, or to exhaust someone else's.
-        from jose import jwt
+        import jwt
 
         forged = jwt.encode({"sub": "victim"}, "attacker-key", algorithm="HS256")
         key = principal_key(_request(headers={"authorization": f"Bearer {forged}"}))

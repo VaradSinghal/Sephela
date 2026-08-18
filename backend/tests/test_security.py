@@ -149,7 +149,7 @@ class TestTokens:
             decode_token(forged)
 
     def test_a_token_signed_with_another_key_is_rejected(self) -> None:
-        from jose import jwt
+        import jwt
 
         alien = jwt.encode({"sub": "user-1", "typ": ACCESS}, "not-our-key", algorithm="HS256")
 

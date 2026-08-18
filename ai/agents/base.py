@@ -5,7 +5,7 @@ from __future__ import annotations
 import abc
 import time
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any, Generic, TypeVar
 
@@ -31,7 +31,7 @@ class AgentError(BaseModel):
     error_type: str
     message: str
     recoverable: bool = True
-    timestamp: datetime = field(default_factory=datetime.utcnow)
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
     context: dict[str, Any] = field(default_factory=dict)
 
 

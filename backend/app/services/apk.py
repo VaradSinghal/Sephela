@@ -28,10 +28,14 @@ class ApkHashes:
 
 
 def compute_hashes(data: bytes) -> ApkHashes:
+    # sha1/md5 are sample *identifiers*, not integrity checks: AV vendors and
+    # threat-intel feeds (URLhaus, MalwareBazaar) key on them, so we must emit
+    # them to correlate. sha256 is the one used as the content-addressed key.
+    # Hence usedforsecurity=False — it is the accurate declaration, not a waiver.
     return ApkHashes(
         sha256=hashlib.sha256(data).hexdigest(),
-        sha1=hashlib.sha1(data).hexdigest(),
-        md5=hashlib.md5(data).hexdigest(),
+        sha1=hashlib.sha1(data, usedforsecurity=False).hexdigest(),
+        md5=hashlib.md5(data, usedforsecurity=False).hexdigest(),
         size=len(data),
     )
 

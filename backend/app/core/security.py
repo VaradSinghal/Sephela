@@ -25,9 +25,10 @@ from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any, Protocol
 
 import bcrypt
+import jwt
 from fastapi import Depends
 from fastapi.security import OAuth2PasswordBearer
-from jose import JWTError, jwt
+from jwt import PyJWTError
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -171,9 +172,7 @@ def _encode(subject: str, token_type: str, ttl: timedelta, claims: dict[str, Any
         "jti": uuid.uuid4().hex,
         **(claims or {}),
     }
-    # str(): python-jose ships no type information, so mypy sees Any here and the
-    # declared return type would be unenforced.
-    return str(jwt.encode(payload, settings.secret_key, algorithm=settings.algorithm))
+    return jwt.encode(payload, settings.secret_key, algorithm=settings.algorithm)
 
 
 def create_access_token(subject: str, claims: dict[str, Any] | None = None) -> str:
@@ -202,7 +201,7 @@ def decode_token(token: str, *, expect: str | None = None) -> dict[str, Any]:
         payload: dict[str, Any] = jwt.decode(
             token, settings.secret_key, algorithms=[settings.algorithm]
         )
-    except JWTError as exc:
+    except PyJWTError as exc:
         raise UnauthorizedError("Invalid or expired token.") from exc
 
     if expect is not None and payload.get("typ") != expect:

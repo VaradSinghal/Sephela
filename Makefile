@@ -92,7 +92,13 @@ test-cov:      ## Run backend tests with coverage floor (80%)
 
 security-scan: ## Run bandit (static security) + pip-audit (dependency CVEs)
 	cd backend && bandit -r app/ -c pyproject.toml -ll
-	cd backend && pip-audit
+	@# PYSEC-2026-1325 (ecdsa, Minerva timing attack) has no upstream fix — the
+	@# project considers side channels out of scope. We removed its only source by
+	@# migrating python-jose -> PyJWT, so a correctly resolved env no longer contains
+	@# ecdsa at all and this ignore is inert. It stays as a temporary net against a
+	@# stale venv or a transitive re-introduction masking the real signal.
+	@# REMOVE once the PyJWT migration is confirmed in staging.
+	cd backend && pip-audit --ignore-vuln PYSEC-2026-1325
 
 audit:         ## Alias for security-scan
 	$(MAKE) security-scan
