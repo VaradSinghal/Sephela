@@ -14,12 +14,17 @@ It holds no analysis logic.
 It is also the *last* consumer of the shared job workspace, so it removes the
 decompiled tree on the way out.
 
-A caveat worth knowing (see infra/k8s/README.md): ``artifact_dir`` is a path on
-the worker's own filesystem. On a single-worker deployment the static stage's
-JADX tree is right there; when static and code-intel land on different workers it
-is not, and this stage passes ``None`` instead. The engine treats the tree as
-optional, so that costs analysis depth — call-graph and control-flow analyzers
-degrade — but never correctness. A storage-backed handoff is the real fix.
+The decompiled tree reaches this stage two ways. ``artifact_dir`` is a path on the
+worker's own filesystem, which is the fast path when static ran here too; when it did
+not, the tree comes out of object storage, where the static stage archived it
+(``app.services.artifacts``). Before the storage handoff existed this stage simply
+passed ``None`` whenever the two stages landed on different workers, which cost
+call-graph and control-flow depth on every multi-worker deployment without ever
+saying so.
+
+The tree is still optional, and this stage is still its last consumer — it removes
+both the local workspace and the stored archive on the way out, because the tree is
+derived from a malware sample and does not outlive the analysis.
 
 Failure policy: no static evidence → ``skipped``; engine missing or exploding →
 ``failed`` stage, job continues.
@@ -40,6 +45,7 @@ from app.core.logging import get_logger
 from app.db.models.analysis import AnalysisJob, JobStatus, Sample, StageStatus
 from app.db.session import AsyncSessionLocal
 from app.repositories.evidence import EvidenceRepository
+from app.services.artifacts import archive_key, discard_tree, fetch_tree
 from app.services.samples import job_workspace_dir
 from app.services.stages import StageOutcome, StageRunner
 from app.tasks.celery_app import celery_app
@@ -69,24 +75,57 @@ def _engine() -> tuple[Any, str]:
     return sephela_code_intel, ENGINE_VERSION
 
 
-def decompiled_tree(static_payload: dict[str, Any]) -> Path | None:
-    """Locate the JADX source tree the static engine reported, if it survived.
-
-    The path is only useful if it is still on *this* worker's disk, so it is
-    verified rather than trusted — a stale path would make the analyzers read an
-    empty tree and silently report less than they could.
-    """
+def _decompile_evidence(static_payload: dict[str, Any]) -> dict[str, Any] | None:
+    """The static envelope's decompiled-Java evidence block, if present."""
     evidence = static_payload.get("evidence")
     if not isinstance(evidence, dict):
         return None
-    decompile = evidence.get("decompile")
-    if not isinstance(decompile, dict):
+    decompile = evidence.get("decompiled_java")
+    return decompile if isinstance(decompile, dict) else None
+
+
+def decompiled_tree(static_payload: dict[str, Any]) -> Path | None:
+    """The JADX source tree on *this* worker's disk, if it is there.
+
+    Verified rather than trusted: a stale path would make the analyzers read an empty
+    tree and silently report less than they could, which is worse than reporting
+    nothing because it looks like a clean result.
+    """
+    decompile = _decompile_evidence(static_payload)
+    if decompile is None:
         return None
     raw = decompile.get("artifact_dir")
     if not isinstance(raw, str) or not raw:
         return None
     path = Path(raw)
     return path if path.is_dir() else None
+
+
+def decompiled_archive_key(static_payload: dict[str, Any]) -> str | None:
+    """The storage key for the archived tree, if the static stage published one."""
+    decompile = _decompile_evidence(static_payload)
+    if decompile is None:
+        return None
+    key = decompile.get("artifact_archive_key")
+    return key if isinstance(key, str) and key else None
+
+
+async def resolve_decompiled_tree(
+    static_payload: dict[str, Any], *, job_id: str, workspace: Path
+) -> Path | None:
+    """Get the decompiled tree, from local disk or from storage.
+
+    Local first: when static ran on this worker the tree is already unpacked, and
+    downloading a copy of what is on disk would be pure waste.
+    """
+    local = decompiled_tree(static_payload)
+    if local is not None:
+        return local
+
+    key = decompiled_archive_key(static_payload)
+    if key is None:
+        return None
+    return await fetch_tree(job_id, key, workspace)
 
 
 async def _run(job_id: str) -> str:
@@ -125,10 +164,12 @@ async def _run(job_id: str) -> str:
                 jid=jid,
             )
         finally:
-            # Last consumer of the workspace: the tree is derived from a malware
-            # sample, so it does not outlive the stage that needed it.
+            # Last consumer of the tree, in both places it can live: the local
+            # workspace and the stored archive. It is derived from a malware sample, so
+            # it does not outlive the stage that needed it.
             if not settings.keep_engine_artifacts:
                 await asyncio.to_thread(shutil.rmtree, job_workspace_dir(jid), True)
+                await discard_tree(job_id, archive_key(job_id))
 
         return outcome.status.value
 
@@ -162,8 +203,12 @@ async def _execute(
         await stage.begin()
         return await stage.skip("The static envelope carries no evidence to analyze.")
 
-    artifact_dir = decompiled_tree(static_payload)
+    artifact_dir = await resolve_decompiled_tree(
+        static_payload, job_id=job_id, workspace=job_workspace_dir(jid)
+    )
     if artifact_dir is None:
+        # Not an error: the engine's analyzers degrade rather than fail, and a static
+        # run without JADX on PATH legitimately produces no tree at all.
         logger.info("code_intel_no_decompiled_tree", job_id=job_id)
 
     await stage.begin()

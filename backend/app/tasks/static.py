@@ -33,6 +33,7 @@ from app.core.config import settings
 from app.core.logging import get_logger
 from app.db.models.analysis import AnalysisJob, JobStatus, Sample, StageStatus
 from app.db.session import AsyncSessionLocal
+from app.services.artifacts import publish_tree
 from app.services.samples import job_workspace_dir, materialize_apk
 from app.services.stages import StageOutcome, StageRunner
 from app.tasks.celery_app import celery_app
@@ -137,9 +138,38 @@ async def _execute(
             await asyncio.to_thread(shutil.rmtree, input_dir, True)
         return await stage.fail(exc)
 
-    outcome = await stage.complete(envelope.model_dump(mode="json"))
+    payload = envelope.model_dump(mode="json")
+    await _publish_decompiled_tree(payload, job_id=job_id)
+
+    outcome = await stage.complete(payload)
     await stage.set_progress(20)
     return outcome
+
+
+async def _publish_decompiled_tree(payload: dict[str, Any], *, job_id: str) -> None:
+    """Copy the JADX tree into storage and record its key on the envelope.
+
+    Done by the task rather than the engine: engines must not know that object storage
+    exists (``backend/.importlinter`` enforces the boundary), so the engine reports a
+    local path and the adapter is what makes it reachable from another worker.
+
+    Mutates ``payload`` in place, adding ``artifact_archive_key`` beside the
+    ``artifact_dir`` the engine wrote. The path stays — it is the fast path for when the
+    next stage happens to land on this same worker.
+    """
+    evidence = payload.get("evidence")
+    if not isinstance(evidence, dict):
+        return
+    decompile = evidence.get("decompiled_java")
+    if not isinstance(decompile, dict):
+        return
+    raw = decompile.get("artifact_dir")
+    if not isinstance(raw, str) or not raw:
+        return
+
+    key = await publish_tree(job_id, Path(raw))
+    if key is not None:
+        decompile["artifact_archive_key"] = key
 
 
 @celery_app.task(

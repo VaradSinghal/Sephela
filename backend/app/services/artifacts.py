@@ -18,9 +18,9 @@ and skipped rather than raised. Failing the stage would trade a real result for 
 from __future__ import annotations
 
 import asyncio
+import io
 import shutil
 import tarfile
-import tempfile
 from pathlib import Path
 
 from app.core.config import settings
@@ -53,49 +53,45 @@ async def publish_tree(job_id: str, tree: Path) -> str | None:
     if not tree.is_dir():
         return None
 
-    def _pack() -> tuple[Path, int]:
-        # To a temp file rather than memory: a decompiled tree is hundreds of
-        # megabytes of source and holding it twice over is avoidable.
-        handle = tempfile.NamedTemporaryFile(suffix=".tar.gz", delete=False)
-        handle.close()
-        path = Path(handle.name)
-        with tarfile.open(path, "w:gz") as archive:
-            # arcname="." keeps the archive rooted at the tree itself, so extracting
-            # it reproduces the tree's contents rather than nesting a directory named
-            # after whichever worker's path it happened to come from.
+    def _pack() -> bytes:
+        buffer = io.BytesIO()
+        with tarfile.open(fileobj=buffer, mode="w:gz") as archive:
+            # arcname="." keeps the archive rooted at the tree itself, so extracting it
+            # reproduces the tree's contents rather than nesting a directory named after
+            # whichever worker's path it happened to come from.
             archive.add(tree, arcname=".")
-        return path, path.stat().st_size
+        return buffer.getvalue()
 
+    # In memory rather than through a temp file: ``StorageBackend.save`` takes bytes, so
+    # a full copy is unavoidable and a temp file would only add a second one. The cap
+    # below is therefore also what bounds this allocation.
     try:
-        archive_path, size = await asyncio.to_thread(_pack)
-    except OSError as exc:
+        data = await asyncio.to_thread(_pack)
+    except (OSError, tarfile.TarError) as exc:
         logger.warning("decompiled_archive_pack_failed", job_id=job_id, error=str(exc))
         return None
 
+    size = len(data)
+    cap = settings.max_decompiled_archive_bytes
+    if size > cap:
+        logger.warning(
+            "decompiled_archive_too_large",
+            job_id=job_id,
+            size_bytes=size,
+            cap_bytes=cap,
+            detail="code intel will run without the decompiled tree",
+        )
+        return None
+
+    key = archive_key(job_id)
     try:
-        cap = settings.max_decompiled_archive_bytes
-        if size > cap:
-            logger.warning(
-                "decompiled_archive_too_large",
-                job_id=job_id,
-                size_bytes=size,
-                cap_bytes=cap,
-                detail="code intel will run without the decompiled tree",
-            )
-            return None
+        await get_storage().save(key, data)
+    except Exception as exc:  # noqa: BLE001 — see the module docstring
+        logger.warning("decompiled_archive_upload_failed", job_id=job_id, error=str(exc))
+        return None
 
-        key = archive_key(job_id)
-        try:
-            data = await asyncio.to_thread(archive_path.read_bytes)
-            await get_storage().save(key, data)
-        except Exception as exc:  # noqa: BLE001 — see the module docstring
-            logger.warning("decompiled_archive_upload_failed", job_id=job_id, error=str(exc))
-            return None
-
-        logger.info("decompiled_archive_published", job_id=job_id, key=key, size_bytes=size)
-        return key
-    finally:
-        await asyncio.to_thread(archive_path.unlink, True)
+    logger.info("decompiled_archive_published", job_id=job_id, key=key, size_bytes=size)
+    return key
 
 
 async def fetch_tree(job_id: str, key: str, workspace: Path) -> Path | None:
@@ -118,18 +114,13 @@ async def fetch_tree(job_id: str, key: str, workspace: Path) -> Path | None:
 
     destination = workspace / EXTRACT_DIRNAME
 
-    def _unpack() -> Path | None:
-        # A previous attempt's partial extraction would otherwise be merged into.
+    def _unpack() -> Path:
+        # A previous attempt's partial extraction would otherwise be merged into, and
+        # the analyzers would read files that were never in this sample.
         shutil.rmtree(destination, ignore_errors=True)
         destination.mkdir(parents=True, exist_ok=True)
-        handle = tempfile.NamedTemporaryFile(suffix=".tar.gz", delete=False)
-        try:
-            handle.write(data)
-            handle.close()
-            with tarfile.open(handle.name, "r:gz") as archive:
-                archive.extractall(path=destination, filter="data")
-        finally:
-            Path(handle.name).unlink(missing_ok=True)
+        with tarfile.open(fileobj=io.BytesIO(data), mode="r:gz") as archive:
+            archive.extractall(path=destination, filter="data")
         return destination
 
     try:

@@ -52,12 +52,13 @@ from this repository alone:
 | Progressive delivery | Not implemented — rollouts are `maxUnavailable: 0` rolling updates, not canary/blue-green. |
 | Terraform, dashboards | Not started. |
 
-One known limit outside Phase 14: the static stage's decompiled JADX tree is
-handed to the code-intel stage as a **filesystem path**, so on a multi-worker
-deployment where the two stages land on different hosts, code intel finds nothing
-there and passes `None`. The engine treats the tree as optional, so this costs
-analysis depth (call-graph and control-flow analyzers degrade) and never
-correctness. A storage-backed handoff is the fix.
+The static → code-intel handoff of the decompiled JADX tree now goes through object
+storage ([backend/app/services/artifacts.py](backend/app/services/artifacts.py)), so
+it no longer depends on the two stages landing on the same worker. The local path
+stays as the fast path; the archive is the fallback, and code intel deletes it as the
+last consumer. It remains an optimisation — the engine treats the tree as optional,
+so an oversized tree or an unreachable bucket costs call-graph and control-flow depth
+rather than correctness.
 
 | Component | Location |
 |---|---|

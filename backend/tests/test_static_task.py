@@ -291,25 +291,38 @@ async def test_code_intel_engine_error_fails_the_stage_only(sample: Sample, monk
 
 
 class TestDecompiledTree:
-    """The static → code-intel artifact handoff.
+    """The static → code-intel artifact handoff, local-disk half.
 
     ``artifact_dir`` is a path on the worker's own filesystem, so it is verified
     rather than trusted: a stale path would make the analyzers read an empty tree
     and silently report less than they could.
+
+    The evidence key is ``decompiled_java``, and that is load-bearing — see
+    ``test_the_evidence_key_matches_the_engines_extractor_name``.
     """
+
+    def test_the_evidence_key_matches_the_engines_extractor_name(self) -> None:
+        # The static pipeline files each extractor's evidence under `extractor.name`.
+        # This lookup read `evidence["decompile"]` while the extractor is called
+        # `decompiled_java`, so the tree was never found — on a single-worker
+        # deployment either. Both this test and the ones below encoded the wrong key,
+        # which is why nothing noticed.
+        from sephela_static.extractors.decompile import DecompileExtractor
+
+        assert DecompileExtractor.name == "decompiled_java"
 
     def test_an_existing_tree_is_passed_through(self, tmp_path: Path) -> None:
         tree = tmp_path / "jadx"
         tree.mkdir()
 
-        found = ci.decompiled_tree({"evidence": {"decompile": {"artifact_dir": str(tree)}}})
+        found = ci.decompiled_tree({"evidence": {"decompiled_java": {"artifact_dir": str(tree)}}})
 
         assert found == tree
 
     def test_a_vanished_tree_degrades_to_none(self, tmp_path: Path) -> None:
         # The case that bites on a multi-worker deployment: static ran elsewhere.
         missing = tmp_path / "gone"
-        payload = {"evidence": {"decompile": {"artifact_dir": str(missing)}}}
+        payload = {"evidence": {"decompiled_java": {"artifact_dir": str(missing)}}}
 
         assert ci.decompiled_tree(payload) is None
 
@@ -317,7 +330,9 @@ class TestDecompiledTree:
         f = tmp_path / "jadx"
         f.write_text("not a directory")
 
-        assert ci.decompiled_tree({"evidence": {"decompile": {"artifact_dir": str(f)}}}) is None
+        assert (
+            ci.decompiled_tree({"evidence": {"decompiled_java": {"artifact_dir": str(f)}}}) is None
+        )
 
     @pytest.mark.parametrize(
         "payload",
@@ -325,10 +340,10 @@ class TestDecompiledTree:
             {},
             {"evidence": None},
             {"evidence": {}},
-            {"evidence": {"decompile": None}},
-            {"evidence": {"decompile": {}}},
-            {"evidence": {"decompile": {"artifact_dir": ""}}},
-            {"evidence": {"decompile": {"artifact_dir": 42}}},
+            {"evidence": {"decompiled_java": None}},
+            {"evidence": {"decompiled_java": {}}},
+            {"evidence": {"decompiled_java": {"artifact_dir": ""}}},
+            {"evidence": {"decompiled_java": {"artifact_dir": 42}}},
         ],
     )
     def test_malformed_evidence_is_tolerated(self, payload: dict[str, Any]) -> None:
@@ -345,7 +360,9 @@ async def test_code_intel_passes_the_tree_when_it_exists(
     tree.mkdir()
     FakeEvidenceRepo.rows = {
         "static": [
-            FakeEvidenceRow({"evidence": {"smali": {}, "decompile": {"artifact_dir": str(tree)}}})
+            FakeEvidenceRow(
+                {"evidence": {"smali": {}, "decompiled_java": {"artifact_dir": str(tree)}}}
+            )
         ]
     }
     stage, engine = FakeStageRunner("code_intel"), FakeCodeIntelEngine()
@@ -359,7 +376,7 @@ async def test_code_intel_passes_the_tree_when_it_exists(
 async def test_code_intel_still_runs_without_the_tree(sample: Sample, monkeypatch) -> None:
     # Degraded depth, not a failed stage — the engine treats the tree as optional.
     FakeEvidenceRepo.rows = {
-        "static": [FakeEvidenceRow({"evidence": {"smali": {}, "decompile": {}}})]
+        "static": [FakeEvidenceRow({"evidence": {"smali": {}, "decompiled_java": {}}})]
     }
     stage, engine = FakeStageRunner("code_intel"), FakeCodeIntelEngine()
 
