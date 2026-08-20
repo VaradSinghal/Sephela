@@ -296,7 +296,7 @@ def _coerce_dict(data: dict[str, Any], schema: type[BaseModel]) -> dict[str, Any
     - str → bool
     - nested dicts already handled by Pydantic
     """
-    from typing import get_args, get_origin
+    from typing import get_origin
 
     result = dict(data)
     for name, field_info in schema.model_fields.items():
@@ -305,7 +305,6 @@ def _coerce_dict(data: dict[str, Any], schema: type[BaseModel]) -> dict[str, Any
         val = result[name]
         ann = field_info.annotation
         origin = get_origin(ann)
-        get_args(ann)
 
         # None → empty list
         if origin is list and val is None:

@@ -82,6 +82,12 @@ DANGEROUS_API_PACKAGES = {
 }
 
 
+#: How many class names to put in the prompt. The smali extractor caps its listing at
+#: 5000 to bound the envelope, which is still far too many to spend context on — the
+#: package structure is legible from a sample, and the counts above carry the scale.
+_CLASS_SAMPLE = 200
+
+
 class CodeAgent(BaseAgent[CodeAnalysis]):
     """Analyzes decompiled code for malicious patterns and suspicious behaviors."""
 
@@ -120,8 +126,8 @@ Output must conform to the CodeAnalysis schema with CodeSummary optimized for LL
         static_evidence = evidence.get("static_evidence", {})
         code_intel_evidence = evidence.get("code_intel", {})
 
-        static_evidence.get("smali", {})
-        static_evidence.get("decompiled_java", {})
+        smali_evidence = static_evidence.get("smali", {})
+        java_evidence = static_evidence.get("decompiled_java", {})
         strings_evidence = static_evidence.get("strings", {})
         hashes_evidence = static_evidence.get("hashes", {})
 
@@ -155,6 +161,15 @@ Dynamic Loading:
 
 Native Libraries:
 {json.dumps(api_usage.get("native_libraries", []), indent=2)}
+
+=== DECOMPILATION SCOPE ===
+Smali classes: {smali_evidence.get("class_count", 0)}
+Smali methods: {smali_evidence.get("method_count", 0)}
+Decompiled Java files: {java_evidence.get("java_file_count", 0)}
+Decompiler exit code: {java_evidence.get("jadx_exit_code", "N/A")}
+
+Class names (sample):
+{json.dumps(smali_evidence.get("classes", [])[:_CLASS_SAMPLE], indent=2)}
 
 === CALL GRAPH ===
 Nodes: {len(call_graph.get("nodes", []))}

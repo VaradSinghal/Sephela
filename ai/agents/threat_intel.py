@@ -118,7 +118,6 @@ Output must conform to the ThreatIntelAnalysis schema."""
         hashes_evidence = static_evidence.get("hashes", {})
         cert_evidence = static_evidence.get("certificate", {})
         manifest_evidence = static_evidence.get("manifest", {})
-        evidence.get("code_intel", {})
 
         # Gather all IOCs
         file_hash = hashes_evidence.get("sha256", "")
@@ -190,8 +189,37 @@ Output complete ThreatIntelAnalysis object."""
         return output.findings
 
 
+def _ioc_match(
+    indicator: str,
+    indicator_type: str,
+    match: dict[str, Any],
+    *,
+    default_source: str,
+) -> IOCMatch:
+    """Build an ``IOCMatch`` from one threat-intel cache entry.
+
+    The severity/confidence pairing is the same judgement the domain and IP paths
+    make: a feed saying "malicious" is treated as high-confidence and critical, a
+    feed that merely *knows* the indicator is medium on both. Sharing it keeps the
+    two from drifting apart.
+    """
+    malicious = bool(match.get("malicious"))
+    return IOCMatch(
+        indicator=indicator,
+        indicator_type=indicator_type,
+        source=match.get("source", default_source),
+        confidence=Confidence.high if malicious else Confidence.medium,
+        severity=Severity.critical if malicious else Severity.medium,
+        tags=match.get("categories", match.get("tags", [])),
+        malware_families=match.get("families", []),
+        first_reported=match.get("first_seen"),
+        last_reported=match.get("last_seen"),
+        context=match,
+    )
+
+
 def analyze_threat_intel_deterministic(
-    evidence: dict[str, Any], ti_cache: dict[str, Any] = None
+    evidence: dict[str, Any], ti_cache: dict[str, Any] | None = None
 ) -> ThreatIntelAnalysis:
     """Deterministic threat intelligence correlation using cached data."""
     static_evidence = evidence.get("static_evidence", {})
@@ -202,8 +230,8 @@ def analyze_threat_intel_deterministic(
     file_hash = hashes_evidence.get("sha256", "")
     domains = network_evidence.get("domains", [])
     ips = network_evidence.get("ips", [])
-    network_evidence.get("urls", [])
-    cert_evidence.get("certificates", [])
+    urls = network_evidence.get("urls", [])
+    certificates = cert_evidence.get("certificates", [])
 
     hash_matches = []
     domain_matches = []
@@ -298,6 +326,30 @@ def analyze_threat_intel_deterministic(
                     first_reported=match.get("first_seen"),
                     last_reported=match.get("last_seen"),
                     context=match,
+                )
+            )
+
+    # Check URLs. A URL match is more specific than its domain — a compromised CDN
+    # serves one malicious path and a thousand benign ones — so it is correlated
+    # separately rather than being folded into the domain result.
+    for url in urls:
+        if ti_cache and url in ti_cache.get("urls", {}):
+            url_matches.append(
+                _ioc_match(url, "url", ti_cache["urls"][url], default_source="URLhaus")
+            )
+
+    # Check signing certificates. Reused signing keys are one of the strongest links
+    # between samples in a campaign, because the private key is harder for an actor
+    # to rotate than a domain or a host.
+    for cert in certificates:
+        digest = cert.get("sha256")
+        if digest and ti_cache and digest in ti_cache.get("certificates", {}):
+            cert_matches.append(
+                _ioc_match(
+                    digest,
+                    "certificate",
+                    ti_cache["certificates"][digest],
+                    default_source="MalwareBazaar",
                 )
             )
 

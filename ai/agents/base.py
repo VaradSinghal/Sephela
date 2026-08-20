@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import abc
+import contextvars
 import time
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -12,6 +13,19 @@ from typing import Any, Generic, TypeVar
 from pydantic import BaseModel, ValidationError
 
 from ai.schemas.base import Finding
+from ai.validation.response_validator import ResponseValidator
+from ai.validation.schema_validator import ValidationReport
+
+#: Exact token usage from the most recent LLM turn, published by ``_call_llm`` and
+#: consumed by ``execute``.  A ContextVar rather than an instance attribute because
+#: agent instances are built once (ai/orchestration/workflow.py) and their LangGraph
+#: nodes run concurrently — instance state would be written by whichever branch
+#: happened to finish last.  Each node runs in its own task, so each sees its own
+#: copy.  Unset (None) means the caller overrode ``_call_llm`` and we fall back to
+#: estimating.
+_LAST_CALL_TOKENS: contextvars.ContextVar[int | None] = contextvars.ContextVar(
+    "sephela_llm_tokens", default=None
+)
 
 
 class AgentStatus(str, Enum):
@@ -48,6 +62,28 @@ class AgentResult:
     tokens_used: int = 0
     model_name: str = ""
     metadata: dict[str, Any] = field(default_factory=dict)
+
+
+class OutputRejectedError(RuntimeError):
+    """The LLM output parsed but violated a business rule, so it is worth retrying.
+
+    Distinct from ``ValidationError``: pydantic rejected nothing here. The shape was
+    right and the content was not.
+    """
+
+
+def _validation_trace(report: ValidationReport) -> dict[str, Any]:
+    """Auditable summary of what the validator did to one response.
+
+    Kept small on purpose — it is stored per agent on every job, so it records the
+    verdict and the issues, not the raw text that produced them.
+    """
+    return {
+        "status": report.status.value,
+        "repair_strategy": report.repair_strategy,
+        "errors": [f"{i.field_path}: {i.message}" for i in report.errors],
+        "warnings": [f"{i.field_path}: {i.message}" for i in report.warnings],
+    }
 
 
 T = TypeVar("T", bound=BaseModel)
@@ -94,6 +130,9 @@ class BaseAgent(abc.ABC, Generic[T]):
         self.llm_client = llm_client
         self.knowledge = knowledge
         self._validate_config()
+        # Built once: it is stateless, and _validate_config has already guaranteed
+        # output_schema is set.
+        self._validator = ResponseValidator(config.output_schema)  # type: ignore[arg-type]
 
     def _validate_config(self) -> None:
         if not self.config.name:
@@ -121,7 +160,7 @@ class BaseAgent(abc.ABC, Generic[T]):
     async def execute(self, evidence: dict[str, Any], context: dict[str, Any]) -> AgentResult:
         """Execute the agent with retries and validation."""
         start_time = time.time()
-        errors = []
+        errors: list[AgentError] = []
 
         # Retrieved once, outside the retry loop: the corpus does not change
         # between attempts, and re-embedding the same query per retry would pay
@@ -131,34 +170,53 @@ class BaseAgent(abc.ABC, Generic[T]):
             context = {**context, "reference_knowledge": knowledge_block}
 
         for attempt in range(self.config.max_retries + 1):
+            last_attempt = attempt == self.config.max_retries
             try:
                 prompt = self.build_prompt(evidence, context)
                 if knowledge_block:
                     prompt = f"{prompt}\n\n{knowledge_block}"
 
-                # Call LLM
+                # Cleared before the call so a stale reading from an earlier attempt
+                # can never be attributed to this one.
+                _LAST_CALL_TOKENS.set(None)
                 raw_output = await self._call_llm(prompt)
 
-                # Parse and validate
-                parsed = self.parse_output(raw_output)
+                parsed, report = self._validate_output(raw_output, evidence)
 
-                # Extract findings
+                # Business-rule errors — a confidence outside [0, 1], a score outside
+                # [0, 100] — mean the output parsed but says something impossible.
+                # Worth another turn, but not worth discarding on the final one: a
+                # usable result with a flagged field beats no result at all, so it
+                # degrades to `partial` the way the engine stages do.
+                blocking = report.errors if report is not None else []
+                if blocking and not last_attempt:
+                    raise OutputRejectedError(
+                        "; ".join(f"{i.field_path}: {i.message}" for i in blocking)
+                    )
+
                 findings = self.extract_findings(parsed)
 
                 execution_time = int((time.time() - start_time) * 1000)
 
+                # Carried so a finding that leaned on background knowledge can be
+                # audited: which documents were in the prompt, whether retrieval was
+                # degraded, and what the validator had to say about the output.
+                metadata: dict[str, Any] = {}
+                if knowledge_trace:
+                    metadata["rag"] = knowledge_trace
+                if report is not None:
+                    metadata["validation"] = _validation_trace(report)
+
                 return AgentResult(
                     agent_name=self.config.name,
-                    status=AgentStatus.completed,
+                    status=AgentStatus.partial if blocking else AgentStatus.completed,
                     output=parsed,
                     findings=findings,
+                    errors=errors,
                     execution_time_ms=execution_time,
-                    tokens_used=self._estimate_tokens(prompt, raw_output),
+                    tokens_used=self._tokens_used(prompt, raw_output),
                     model_name=self.config.model,
-                    # Carried so a finding that leaned on background knowledge can
-                    # be audited: which documents were in the prompt, and whether
-                    # retrieval was degraded at the time.
-                    metadata={"rag": knowledge_trace} if knowledge_trace else {},
+                    metadata=metadata,
                 )
 
             except ValidationError as e:
@@ -218,17 +276,86 @@ class BaseAgent(abc.ABC, Generic[T]):
         return block or "", trace
 
     async def _call_llm(self, prompt: str) -> str:
-        """Call the LLM client. Override for custom clients."""
+        """Run one LLM turn and return the raw text. Override for custom clients.
+
+        Two client shapes are accepted, because both exist in this codebase and a
+        caller should not have to care which one it holds:
+
+        - ``generate(...)`` — ``ai.llm.factory.LLMGateway``, the interface the
+          orchestrator actually wires in. The agent's ``output_schema`` is passed
+          through so the gateway puts the provider in JSON mode and runs its own
+          self-correction turn on a schema miss. That is a *cheaper* retry than the
+          one in ``execute``: it re-prompts with the validation error instead of
+          rebuilding the prompt and paying for the evidence tokens again.
+        - ``complete(prompt)`` — the ``ai.llm.client.LLMClient`` ABC, which knows
+          nothing about schemas and so gets the prompt as-is.
+
+        Exact token usage is published on ``_LAST_CALL_TOKENS`` rather than
+        returned, so overriding this method stays a one-line job.
+        """
         if self.llm_client is None:
-            raise RuntimeError("LLM client not configured")
+            raise RuntimeError(
+                f"{self.config.name}: no llm_client configured. Pass one to the "
+                f"constructor or override _call_llm."
+            )
 
-        # This is a placeholder - implement based on your LLM client
-        # Example for Anthropic:
-        # response = await self.llm_client.messages.create(...)
-        # return response.content[0].text
+        if hasattr(self.llm_client, "generate"):
+            result = await self.llm_client.generate(
+                model_name=self.config.model,
+                system_prompt=self.config.system_prompt,
+                user_prompt=prompt,
+                response_schema=self.config.output_schema,
+                temperature=self.config.temperature,
+                max_tokens=self.config.max_tokens,
+                timeout_s=float(self.config.timeout_seconds),
+            )
+            usage = getattr(result, "usage", None)
+            _LAST_CALL_TOKENS.set(getattr(usage, "total_tokens", None))
+            return str(result.content)
 
-        # For now, raise not implemented
-        raise NotImplementedError("_call_llm must be implemented or llm_client provided")
+        if hasattr(self.llm_client, "complete"):
+            response = await self.llm_client.complete(prompt)
+            _LAST_CALL_TOKENS.set(getattr(response, "tokens_used", None))
+            return str(response.content)
+
+        raise TypeError(
+            f"{self.config.name}: llm_client of type "
+            f"{type(self.llm_client).__name__} exposes neither generate() nor "
+            f"complete(); cannot call it."
+        )
+
+    def _validate_output(
+        self, raw_output: str, evidence: dict[str, Any]
+    ) -> tuple[T, ValidationReport | None]:
+        """Turn raw LLM text into a validated model.
+
+        ``ResponseValidator`` runs first because it is strictly stronger than the
+        per-agent ``parse_output``: seven JSON-repair strategies and type coercion
+        rather than ``json.loads`` plus one code-fence regex, and on top of that the
+        business rules — confidence and score bounds, MITRE mappings on high-severity
+        findings, and ``_check_evidence_refs``, which is what stops an agent citing an
+        extractor that never ran.
+
+        ``parse_output`` stays the fallback and the extension point: an agent that
+        needs to do something the validator cannot still gets its turn, and its
+        exception still drives the retry loop.
+        """
+        report = self._validator.validate(
+            raw_output, evidence=evidence, agent_name=self.config.name
+        )
+        if report.is_usable and report.model_instance is not None:
+            return report.model_instance, report  # type: ignore[return-value]
+        return self.parse_output(raw_output), None
+
+    def _tokens_used(self, prompt: str, output: str) -> int:
+        """Exact usage when the provider reported it, else an estimate.
+
+        A custom ``_call_llm`` publishes nothing, so it lands on the estimate.
+        """
+        reported = _LAST_CALL_TOKENS.get()
+        if reported is not None:
+            return reported
+        return self._estimate_tokens(prompt, output)
 
     def _estimate_tokens(self, prompt: str, output: str) -> int:
         """Rough token estimation."""

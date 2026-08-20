@@ -19,6 +19,35 @@ from ai.schemas.report import (
 )
 
 
+def _field(finding: Any, name: str, default: Any = None) -> Any:
+    """Read ``name`` off a finding that may be a dict or a model.
+
+    Both shapes reach this agent: the graph carries findings as dicts
+    (``GraphState.all_findings`` is ``list[dict[str, Any]]``) while a direct caller
+    may pass ``Finding`` instances. The previous inline version tested
+    ``hasattr(f.severity, "value")``, which evaluates ``f.severity`` first — an
+    ``AttributeError`` for every dict, so this prompt could not be built for any job
+    that had produced a finding.
+    """
+    if isinstance(finding, dict):
+        return finding.get(name, default)
+    return getattr(finding, name, default)
+
+
+def _finding_detail(finding: Any) -> dict[str, Any]:
+    """The per-finding block the report prompt carries."""
+    severity = _field(finding, "severity")
+    return {
+        "id": _field(finding, "id"),
+        "type": _field(finding, "type"),
+        "severity": getattr(severity, "value", severity),
+        "title": _field(finding, "title"),
+        "description": _field(finding, "description"),
+        "mitre": _field(finding, "mitre_techniques", []),
+        "owasp": _field(finding, "owasp_mobile", []),
+    }
+
+
 class ReportAgent(BaseAgent[ReportGenerationResult]):
     """Generates comprehensive analysis reports from all agent outputs."""
 
@@ -69,31 +98,7 @@ Category: {risk_output.get("primary_category", "unknown")}
 Breakdown: {json.dumps(risk_output.get("breakdown", []), indent=2)}
 
 === ALL FINDINGS ({len(all_findings)}) ===
-{
-            json.dumps(
-                [
-                    {
-                        "id": f.id if hasattr(f, "id") else f.get("id"),
-                        "type": f.type if hasattr(f, "type") else f.get("type"),
-                        "severity": f.severity.value
-                        if hasattr(f.severity, "value")
-                        else f.get("severity"),
-                        "title": f.title if hasattr(f, "title") else f.get("title"),
-                        "description": f.description
-                        if hasattr(f, "description")
-                        else f.get("description"),
-                        "mitre": f.mitre_techniques
-                        if hasattr(f, "mitre_techniques")
-                        else f.get("mitre_techniques", []),
-                        "owasp": f.owasp_mobile
-                        if hasattr(f, "owasp_mobile")
-                        else f.get("owasp_mobile", []),
-                    }
-                    for f in all_findings
-                ],
-                indent=2,
-            )
-        }
+{json.dumps([_finding_detail(f) for f in all_findings], indent=2)}
 
 === AGENT OUTPUTS ===
 Manifest: {json.dumps(context.get("manifest_agent_output", {}), indent=2)[:2000]}

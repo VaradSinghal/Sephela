@@ -129,7 +129,6 @@ Output a complete PermissionAnalysis object with:
 - Findings with MITRE/OWASP mappings"""
 
     def build_prompt(self, evidence: dict[str, Any], context: dict[str, Any]) -> str:
-        evidence.get("manifest", {})
         permission_evidence = evidence.get("permissions", {})
         code_evidence = context.get("code_agent_output", {})
 
@@ -178,7 +177,7 @@ Output complete PermissionAnalysis object."""
 
 
 def analyze_permissions_deterministic(
-    evidence: dict[str, Any], code_context: dict[str, Any] = None
+    evidence: dict[str, Any], code_context: dict[str, Any] | None = None
 ) -> PermissionAnalysis:
     """Deterministic permission analysis without LLM."""
     permission_evidence = evidence.get("permissions", {})
@@ -300,7 +299,12 @@ def _assess_permission_risk(permission: str, used_in_code: bool) -> PermissionRi
         owasp_categories=owasp,
         evidence_refs=[EvidenceRef(extractor="permissions", path="permissions")],
         is_runtime_requested=True,
-        is_used_by_component=used_in_code,
+        # `is_used_by_component` is a list of component *names*, which this function
+        # does not have: its code context supplies permissions_used, not the components
+        # that use them. Passing the bool here raised ValidationError on every
+        # permission, so this analyzer could not run at all. Confirmed code usage is
+        # still visible — it raises risk_score, lifts confidence, and is stated in the
+        # rationale — so nothing is lost by leaving the field at its default.
     )
 
 

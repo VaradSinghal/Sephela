@@ -42,10 +42,12 @@ from __future__ import annotations
 
 import logging
 import os
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from typing import Any
 
 from ai.llm.factory import LLMGateway
+from ai.llm.provider import ProviderName
 from ai.orchestration.workflow import WorkflowConfig, build_workflow
 
 _LOG = logging.getLogger("sephela.integration")
@@ -56,6 +58,44 @@ _LOG = logging.getLogger("sephela.integration")
 # ---------------------------------------------------------------------------
 
 
+#: The model every agent uses when nothing more specific is configured, per
+#: provider. Which slug is correct is not a preference — the *same* model is
+#: ``claude-opus-5`` to Anthropic's API and ``anthropic/claude-opus-5`` to
+#: OpenRouter's, and each rejects the other's spelling. So the default cannot be a
+#: single constant; it has to be chosen from what is actually registered.
+_PROVIDER_DEFAULT_MODEL: dict[ProviderName, str] = {
+    ProviderName.ANTHROPIC: "claude-opus-5",
+    ProviderName.OPENROUTER: "anthropic/claude-opus-5",
+    ProviderName.OPENAI: "gpt-4o",
+    ProviderName.GEMINI: "gemini-1.5-pro",
+    ProviderName.LOCAL: "local/default",
+}
+
+#: Preference order when several providers are registered. Anthropic first because
+#: the prompts and schemas in ai/prompts/ were written and tuned against Claude;
+#: OpenRouter second because it can serve the same model, just more indirectly.
+_PROVIDER_PREFERENCE: tuple[ProviderName, ...] = (
+    ProviderName.ANTHROPIC,
+    ProviderName.OPENROUTER,
+    ProviderName.OPENAI,
+    ProviderName.GEMINI,
+    ProviderName.LOCAL,
+)
+
+#: Per-agent environment override. Set ``CODE_MODEL=deepseek/deepseek-coder`` to
+#: move one agent without touching the rest.
+_AGENT_MODEL_ENV_VARS: dict[str, str] = {
+    "manifest_agent": "MANIFEST_MODEL",
+    "permission_agent": "PERMISSION_MODEL",
+    "code_agent": "CODE_MODEL",
+    "api_agent": "API_MODEL",
+    "network_agent": "NETWORK_MODEL",
+    "threat_intel_agent": "THREAT_INTEL_MODEL",
+    "risk_agent": "RISK_MODEL",
+    "report_agent": "REPORT_MODEL",
+}
+
+
 @dataclass
 class AgentModelConfig:
     """
@@ -63,6 +103,10 @@ class AgentModelConfig:
 
     Agents are independent; different agents can use different models,
     e.g. code agents may prefer DeepSeek-Coder.
+
+    Prefer ``for_providers(gateway.providers)`` over constructing this directly:
+    the field defaults below spell the model the Anthropic way, which an
+    OpenRouter-only deployment cannot serve.
     """
 
     manifest_agent: str = field(
@@ -81,22 +125,39 @@ class AgentModelConfig:
     report_agent: str = field(default_factory=lambda: os.getenv("REPORT_MODEL", "claude-opus-5"))
 
     @classmethod
+    def for_providers(cls, providers: Iterable[ProviderName]) -> AgentModelConfig:
+        """Defaults the registered providers can actually serve.
+
+        Without this, an OpenRouter-only deployment fails on every agent call. The
+        bare ``claude-opus-5`` default finds no explicit supporter, so
+        ``ModelRouter.resolve`` falls through to its OpenRouter-as-universal-fallback
+        branch and forwards the Anthropic spelling to an API that requires
+        ``anthropic/claude-opus-5`` — a 400 on every request that reads like a wiring
+        bug rather than a naming one.
+
+        Per-agent ``*_MODEL`` environment variables still win, so a deliberate
+        choice is never overridden by this inference.
+        """
+        registered = frozenset(providers)
+        fallback = next(
+            (_PROVIDER_DEFAULT_MODEL[name] for name in _PROVIDER_PREFERENCE if name in registered),
+            _PROVIDER_DEFAULT_MODEL[ProviderName.ANTHROPIC],
+        )
+        return cls(
+            **{
+                agent: os.getenv(env_var) or fallback
+                for agent, env_var in _AGENT_MODEL_ENV_VARS.items()
+            }
+        )
+
+    @classmethod
     def openrouter_defaults(cls) -> AgentModelConfig:
         """Route every agent through OpenRouter instead of a first-party API.
 
-        OpenRouter's catalogue lags first-party releases, so verify these slugs at
+        OpenRouter's catalogue lags first-party releases, so verify the slug at
         https://openrouter.ai/models before relying on this preset.
         """
-        return cls(
-            manifest_agent="anthropic/claude-opus-5",
-            permission_agent="anthropic/claude-opus-5",
-            code_agent="anthropic/claude-opus-5",
-            api_agent="anthropic/claude-opus-5",
-            network_agent="anthropic/claude-opus-5",
-            threat_intel_agent="anthropic/claude-opus-5",
-            risk_agent="anthropic/claude-opus-5",
-            report_agent="anthropic/claude-opus-5",
-        )
+        return cls.for_providers([ProviderName.OPENROUTER])
 
     @classmethod
     def fast_cheap(cls) -> AgentModelConfig:
@@ -183,7 +244,9 @@ class SephelaAnalysisPipeline:
         knowledge: Any = None,
     ) -> None:
         self._gateway = gateway
-        self._model_config = model_config or AgentModelConfig()
+        # Not `or AgentModelConfig()`: the bare defaults name Anthropic-spelled
+        # models, which an OpenRouter-only gateway cannot route.
+        self._model_config = model_config or AgentModelConfig.for_providers(gateway.providers)
         self._analysis_timeout_s = analysis_timeout_s
         self._risk_timeout_s = risk_timeout_s
         self._report_timeout_s = report_timeout_s

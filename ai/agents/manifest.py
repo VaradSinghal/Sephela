@@ -112,6 +112,33 @@ DANGEROUS_PERMISSIONS = {
 }
 
 
+def _as_filter_list(raw: Any) -> list[dict[str, Any]]:
+    """Normalise the static engine's intent-filter value to what the schema wants.
+
+    ``ComponentInfo.intent_filters`` is a ``list[dict]``, but androguard's
+    ``get_intent_filters`` returns a single dict per component and the extractor
+    stores it verbatim. Passing that through raised a ``ValidationError`` on every
+    component — which, together with the ``rstrip`` bug above, meant this whole
+    function raised the moment any component was present.
+    """
+    if raw is None:
+        return []
+    if isinstance(raw, dict):
+        return [raw]
+    if isinstance(raw, list):
+        return [f for f in raw if isinstance(f, dict)]
+    return []
+
+
+#: Evidence key -> the ``component_type`` value ``extract_findings`` matches on.
+_COMPONENT_TYPES: dict[str, str] = {
+    "activities": "activity",
+    "services": "service",
+    "receivers": "receiver",
+    "providers": "provider",
+}
+
+
 class ManifestAgent(BaseAgent[ManifestAnalysis]):
     """Analyzes Android manifest for security-relevant declarations."""
 
@@ -308,26 +335,30 @@ def analyze_manifest_deterministic(evidence: dict[str, Any]) -> ManifestAnalysis
             )
 
     components = []
-    for comp_type in ("activities", "services", "receivers", "providers"):
+    # Explicit plural -> singular, not `rstrip("s")`: rstrip removes *characters*, so
+    # "activities" became "activitie" and never matched the component_type values
+    # extract_findings checks for. Exported activities — the surface another app can
+    # actually launch — silently produced no finding.
+    for comp_type, singular in _COMPONENT_TYPES.items():
         for name in component_evidence.get(comp_type, []):
-            # Check if exported via intent filters
-            exported = False
-            intent_filters = {}
-            if name in component_evidence.get("intent_filters", {}):
-                exported = True
-                intent_filters = component_evidence["intent_filters"][name]
+            # A declared intent filter is what makes a component reachable from
+            # another app, so it is the exported signal here.
+            raw_filters = component_evidence.get("intent_filters", {}).get(name)
+            exported = raw_filters is not None
             components.append(
                 ComponentInfo(
                     name=name,
-                    component_type=comp_type.rstrip("s"),
+                    component_type=singular,
                     exported=exported,
-                    intent_filters=intent_filters,
+                    intent_filters=_as_filter_list(raw_filters),
                 )
             )
 
-    # Certificates
+    # Certificates are carried through verbatim. Debug-signing is detected and turned
+    # into a finding by the static engine's CertificateExtractor (cert:debug), which
+    # has the parsed certificate rather than this summary; a second check here had no
+    # field on ManifestAnalysis to record itself in and its result was discarded.
     certs = cert_evidence.get("certificates", [])
-    any("Android Debug" in c.get("subject", "") for c in certs)
 
     return ManifestAnalysis(
         package_name=manifest_evidence.get("package_name", "unknown"),

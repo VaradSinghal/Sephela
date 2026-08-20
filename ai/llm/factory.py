@@ -84,6 +84,20 @@ class ModelRouter:
     def __init__(self, providers: list[BaseLLMProvider]) -> None:
         self._by_name: dict[ProviderName, BaseLLMProvider] = {p.provider_name: p for p in providers}
 
+    @property
+    def providers(self) -> frozenset[ProviderName]:
+        """Which providers are registered. Callers need this to pick model IDs.
+
+        A bare ``claude-opus-5`` and ``anthropic/claude-opus-5`` name the same model
+        but only one of them is valid per provider, so the choice of slug cannot be
+        made without knowing what is registered.
+        """
+        return frozenset(self._by_name)
+
+    def resolve_by_name(self, name: ProviderName) -> BaseLLMProvider:
+        """The registered provider under ``name``. Raises ``KeyError`` if absent."""
+        return self._by_name[name]
+
     def resolve(self, model_id: str) -> BaseLLMProvider:
         # Step 1 — provider explicit support
         for provider in self._by_name.values():
@@ -447,10 +461,15 @@ class LLMGateway:
     # Lifecycle
     # ------------------------------------------------------------------
 
+    @property
+    def providers(self) -> frozenset[ProviderName]:
+        """Which providers this gateway can route to."""
+        return self._router.providers
+
     async def close(self) -> None:
         """Release all provider HTTP connections."""
-        for provider in self._router._by_name.values():
-            await provider.close()
+        for name in self._router.providers:
+            await self._router.resolve_by_name(name).close()
 
 
 # ---------------------------------------------------------------------------

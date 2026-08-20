@@ -19,6 +19,7 @@ Repair strategies (applied in order)
 
 from __future__ import annotations
 
+import ast
 import json
 import logging
 import re
@@ -75,6 +76,7 @@ class JSONRepair:
             ("brace_extract", cls._try_brace_extract),
             ("trailing_comma_fix", cls._try_trailing_comma),
             ("single_quote_fix", cls._try_single_quote),
+            ("python_literal", cls._try_python_literal),
             ("truncation_repair", cls._try_truncation_repair),
             ("aggressive_extract", cls._try_aggressive_extract),
         ]
@@ -168,6 +170,30 @@ class JSONRepair:
             return RepairResult(success=True, data=data, repaired_text=fixed)
         except json.JSONDecodeError:
             return RepairResult(success=False)
+
+    @staticmethod
+    def _try_python_literal(text: str) -> RepairResult:
+        """Parse a Python dict repr — single quotes on values as well as keys.
+
+        ``single_quote_fix`` only rewrites keys, so ``{'verdict': 'clean'}`` still
+        failed. Fixing values by regex is the wrong tool: an apostrophe inside a
+        description ("doesn't decrypt") turns a quote-swap into a syntax error.
+        ``ast.literal_eval`` parses the grammar instead, and also accepts Python's
+        ``True``/``False``/``None`` spellings, which models emit when they slip out of
+        JSON. It evaluates literals only — no names, calls, or operators — so untrusted
+        model output cannot execute anything through it.
+        """
+        start = text.find("{")
+        end = text.rfind("}")
+        if start == -1 or end <= start:
+            return RepairResult(success=False)
+        try:
+            data = ast.literal_eval(text[start : end + 1])
+        except (ValueError, SyntaxError, MemoryError, RecursionError):
+            return RepairResult(success=False)
+        if not isinstance(data, dict):
+            return RepairResult(success=False)
+        return RepairResult(success=True, data=data, repaired_text=json.dumps(data, default=str))
 
     @staticmethod
     def _try_truncation_repair(text: str) -> RepairResult:

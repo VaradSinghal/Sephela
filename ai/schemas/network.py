@@ -76,7 +76,11 @@ class NetworkFinding(Finding):
         pattern="^(c2|data_exfil|insecure_config|suspicious_domain|pinning_bypass|cleartext|cert_pinning)$",
     )
     indicator: str
-    indicator_type: str = Field(..., pattern="^(domain|ip|url|certificate)$")
+    # `configuration` belongs here because `finding_type` already admits `cleartext`
+    # and `insecure_config`, neither of which has a domain, IP, URL or certificate to
+    # point at. Without it, an APK with usesCleartextTraffic=true — routine in this
+    # sample population — raised ValidationError and took the whole analysis with it.
+    indicator_type: str = Field(..., pattern="^(domain|ip|url|certificate|configuration)$")
     ti_context: DomainIntel | IPIntel | CertificateInfo | None = None
     protocol: str | None = None
     port: int | None = None

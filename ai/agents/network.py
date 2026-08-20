@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ipaddress
 import json
 import re
 from typing import Any
@@ -173,8 +174,23 @@ Analyze and output a complete NetworkAnalysis object with:
         return output.findings
 
 
+def _is_routable(raw: str) -> bool:
+    """Whether ``raw`` is a public IP address.
+
+    Uses ``ipaddress`` rather than string prefixes: the private block is
+    172.16.0.0/12, so a ``"172.16."`` prefix test treats 172.17–172.31 as public and
+    inflates the suspicious-connection count on any internal address. Anything
+    unparseable is treated as not routable — a malformed extraction is not evidence.
+    """
+    try:
+        addr = ipaddress.ip_address(raw)
+    except ValueError:
+        return False
+    return not (addr.is_private or addr.is_loopback or addr.is_link_local or addr.is_reserved)
+
+
 def analyze_network_deterministic(
-    evidence: dict[str, Any], ti_context: dict[str, Any] = None
+    evidence: dict[str, Any], ti_context: dict[str, Any] | None = None
 ) -> NetworkAnalysis:
     """Deterministic network analysis without LLM."""
     network_evidence = evidence.get("static_evidence", {}).get("network", {})
@@ -263,16 +279,17 @@ def analyze_network_deterministic(
 
     # Analyze IPs
     for ip in ips:
+        # A hardcoded public IP is the interesting case: it usually means a C2 address
+        # that does not need DNS. Private and loopback addresses are not.
+        routable = _is_routable(ip)
         connections.append(
             NetworkConnection(
                 host=ip,
                 protocol="tcp",
                 source="string",
                 context="Extracted IP address",
-                is_suspicious=not ip.startswith(("10.", "192.168.", "172.16.", "127.")),
-                suspicion_reasons=["Public IP address"]
-                if not ip.startswith(("10.", "192.168.", "172.16.", "127."))
-                else [],
+                is_suspicious=routable,
+                suspicion_reasons=["Public IP address"] if routable else [],
             )
         )
 
