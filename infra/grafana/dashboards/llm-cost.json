@@ -1,0 +1,203 @@
+{
+  "uid": "sephela-llm-cost",
+  "title": "Sephela — LLM Cost & Latency",
+  "description": "What the multi-agent stage costs and how reliably it answers. Eight agents run per job, each on its own model, so cost per analysis is a product decision rather than a footnote — and without these panels it is only visible on next month's invoice.",
+  "tags": ["sephela", "llm", "cost"],
+  "timezone": "utc",
+  "editable": true,
+  "schemaVersion": 39,
+  "refresh": "1m",
+  "time": { "from": "now-24h", "to": "now" },
+  "templating": {
+    "list": [
+      {
+        "name": "datasource",
+        "label": "Data source",
+        "type": "datasource",
+        "query": "prometheus",
+        "current": { "text": "Prometheus", "value": "Prometheus" }
+      },
+      {
+        "name": "model",
+        "label": "Model",
+        "type": "query",
+        "datasource": { "type": "prometheus", "uid": "${datasource}" },
+        "query": "label_values(sephela_llm_calls_total, model)",
+        "includeAll": true,
+        "multi": true,
+        "current": { "text": "All", "value": "$__all" }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "row",
+      "title": "Spend",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 }
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Tokens per hour, by model",
+      "description": "Includes the gateway's own retry and self-correction turns, because the agents report the totals it hands back. A step change with flat job throughput means the model started needing correction.",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 1 },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (model) (rate(sephela_llm_tokens_total{model=~\"$model\"}[1h])) * 3600",
+          "legendFormat": "{{model}}"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Tokens per hour, by agent",
+      "description": "Which prompt to shorten. The code and report agents carry the largest evidence blocks, so they dominate unless something has gone wrong elsewhere.",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 1 },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (agent) (rate(sephela_llm_tokens_total{model=~\"$model\"}[1h])) * 3600",
+          "legendFormat": "{{agent}}"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Tokens per analysed sample",
+      "description": "The number to put in front of a budget conversation: total tokens divided by jobs that reached a verdict.",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 4, "w": 8, "x": 0, "y": 9 },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(sephela_llm_tokens_total[6h])) / clamp_min(sum(rate(sephela_risk_tier_total[6h])), 0.0001)"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "Tokens (24h)",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 4, "w": 8, "x": 8, "y": 9 },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "expr": "sum(increase(sephela_llm_tokens_total[24h]))" }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "stat",
+      "title": "Agent calls (24h)",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 4, "w": 8, "x": 16, "y": 9 },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "targets": [{ "refId": "A", "expr": "sum(increase(sephela_llm_calls_total[24h]))" }]
+    },
+    {
+      "id": 7,
+      "type": "row",
+      "title": "Reliability",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 13 }
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "Agent outcomes per hour",
+      "description": "`partial` means the validator flagged something — a confidence out of range, or a finding citing an extractor that never ran — and the result was kept anyway. It is not a failure, but a rise in it is a quality signal.",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 14 },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (outcome) (rate(sephela_llm_calls_total{model=~\"$model\"}[1h])) * 3600",
+          "legendFormat": "{{outcome}}"
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "type": "timeseries",
+      "title": "Agent failure rate, by agent",
+      "description": "One agent failing while the others succeed points at its schema or its prompt, not at the provider.",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 14 },
+      "fieldConfig": { "defaults": { "unit": "percentunit", "min": 0, "max": 1 }, "overrides": [] },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (agent) (rate(sephela_llm_calls_total{outcome=\"failed\"}[1h])) / clamp_min(sum by (agent) (rate(sephela_llm_calls_total[1h])), 0.0001)",
+          "legendFormat": "{{agent}}"
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "type": "row",
+      "title": "Latency",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 22 }
+    },
+    {
+      "id": 11,
+      "type": "timeseries",
+      "title": "Agent p95 latency, by model",
+      "description": "The tail is what decides whether the AI stage fits inside its Celery time limit. A provider slowdown shows here well before it shows as a stage failure.",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 23 },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum by (le, model) (rate(sephela_llm_call_duration_seconds_bucket{model=~\"$model\"}[10m])))",
+          "legendFormat": "{{model}}"
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "type": "timeseries",
+      "title": "Agent p95 latency, by agent",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 23 },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum by (le, agent) (rate(sephela_llm_call_duration_seconds_bucket{model=~\"$model\"}[10m])))",
+          "legendFormat": "{{agent}}"
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "type": "timeseries",
+      "title": "AI stage duration vs its time limit",
+      "description": "The whole stage, not one agent. The six analysis agents run in parallel and risk and report run after them, so the stage is slower than its slowest agent.",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 31 },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(sephela_stage_duration_seconds_bucket{stage=\"ai_orchestrator\"}[10m])))",
+          "legendFormat": "p95"
+        },
+        {
+          "refId": "B",
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(sephela_stage_duration_seconds_bucket{stage=\"ai_orchestrator\"}[10m])))",
+          "legendFormat": "p99"
+        }
+      ]
+    }
+  ]
+}

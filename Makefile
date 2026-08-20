@@ -66,6 +66,9 @@ k8s-validate:  ## Validate the K8s manifests (structure + security posture; no c
 k8s-render:    ## Render one overlay to stdout: make k8s-render ENV=prod
 	kustomize build infra/k8s/overlays/$(or $(ENV),dev)
 
+dashboards-validate: ## Validate Grafana dashboards + Prometheus rules (no Grafana needed)
+	cd backend && pytest tests/test_dashboards.py -q
+
 load-read:     ## k6 steady-state read load (staging only — see infra/load/README.md)
 	k6 run infra/load/k6/api-read.js
 
@@ -129,6 +132,7 @@ ci-gates:      ## Run ALL CI gates locally (lint, type, test, security, import, 
 	$(MAKE) test-ai
 	$(MAKE) security-scan
 	$(MAKE) import-lint
+	$(MAKE) dashboards-validate
 	$(MAKE) lint-fe
 	$(MAKE) fmt-fe-check
 	$(MAKE) test-fe

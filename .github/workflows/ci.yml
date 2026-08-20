@@ -192,7 +192,7 @@ jobs:
   # Infrastructure manifests (structure + security posture; no cluster)
   # ──────────────────────────────────────────────
   infra-validate:
-    name: K8s Manifest Validation
+    name: Infra Validation
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -210,6 +210,11 @@ jobs:
       # `kubectl apply --dry-run=server`, which needs a cluster.
       - name: Validate manifests
         run: cd backend && pytest tests/test_k8s_manifests.py -v
+      # Catches the failure a running Grafana never reports: a panel querying a metric
+      # nothing emits renders an empty graph, and an empty graph on a health dashboard
+      # reads as "no problems here".
+      - name: Validate dashboards and alert rules
+        run: cd backend && pytest tests/test_dashboards.py -v
       - name: Shell-check the deploy script
         run: bash -n infra/k8s/deploy.sh
 

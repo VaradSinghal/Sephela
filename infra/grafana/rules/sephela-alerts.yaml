@@ -1,0 +1,190 @@
+# Prometheus alerting and recording rules for Sephela.
+#
+# Two principles decide what is here and what is not.
+#
+# Every alert has to be actionable and it has to be about something an operator can
+# distinguish from normal. `partial` jobs, skipped stages, and a wholly absent AI stage
+# are all *expected* on a deployment running a subset of the pipeline — none of them is
+# an alert. What is an alert is a change: a stage that starts failing, a queue that stops
+# draining, a provider that stops answering.
+#
+# And an alert that fires on a quiet system is an alert that gets muted. Every ratio here
+# is guarded so a near-zero denominator cannot produce a spurious 100%: `clamp_min` on the
+# divisor, plus a `for` window long enough that a single scrape cannot trip it.
+groups:
+  - name: sephela-recording
+    interval: 30s
+    rules:
+      # Precomputed because the dashboards and several alerts below all want them, and
+      # the raw expressions are long enough to get subtly out of step if written twice.
+      - record: sephela:job_failure_ratio:5m
+        expr: |
+          sum(rate(sephela_jobs_total{status="failed"}[5m]))
+            / clamp_min(sum(rate(sephela_jobs_total[5m])), 0.0001)
+
+      - record: sephela:stage_failure_ratio:5m
+        expr: |
+          sum by (stage) (rate(sephela_stage_total{status="failed"}[5m]))
+            / clamp_min(sum by (stage) (rate(sephela_stage_total[5m])), 0.0001)
+
+      - record: sephela:llm_failure_ratio:10m
+        expr: |
+          sum(rate(sephela_llm_calls_total{outcome="failed"}[10m]))
+            / clamp_min(sum(rate(sephela_llm_calls_total[10m])), 0.0001)
+
+      - record: sephela:tokens_per_sample:6h
+        expr: |
+          sum(rate(sephela_llm_tokens_total[6h]))
+            / clamp_min(sum(rate(sephela_risk_tier_total[6h])), 0.0001)
+
+  - name: sephela-pipeline
+    interval: 30s
+    rules:
+      - alert: SephelaJobFailureRateHigh
+        expr: sephela:job_failure_ratio:5m > 0.1
+        for: 15m
+        labels:
+          severity: warning
+          component: pipeline
+        annotations:
+          summary: More than 10% of jobs are failing
+          description: >-
+            {{ $value | humanizePercentage }} of jobs reached a failed state over the last
+            5 minutes. `partial` is excluded — this is jobs that produced no usable
+            analysis at all. Check the per-stage failure panel first; a single stage is
+            the usual cause.
+          runbook: docs/runbooks/backup-and-dr.md
+
+      - alert: SephelaStageFailing
+        expr: sephela:stage_failure_ratio:5m > 0.25
+        for: 15m
+        labels:
+          severity: warning
+          component: pipeline
+        annotations:
+          summary: Stage {{ $labels.stage }} is failing for a quarter of its executions
+          description: >-
+            A single stage failing while the others are healthy is almost always its tool
+            missing from that worker's image — JADX for static, androguard for smali,
+            APKID for packers. The stage's recorded error names it.
+
+      - alert: SephelaQueueBacklogGrowing
+        # Depth alone is not a problem: a burst upload legitimately queues work. A depth
+        # that is high *and* not falling is, so this needs the derivative too.
+        expr: |
+          sephela_queue_depth > 100
+            and deriv(sephela_queue_depth[15m]) > 0
+        for: 20m
+        labels:
+          severity: warning
+          component: workers
+        annotations:
+          summary: Queue {{ $labels.queue }} is backing up
+          description: >-
+            {{ $value }} messages waiting and still climbing. The workers for this class
+            are saturated; KEDA scales on this signal, so a backlog that persists means
+            scaling is capped or blocked rather than lagging.
+
+      - alert: SephelaNoJobsCompleting
+        # Deliberately not paged: an idle platform is normal outside business hours, and
+        # this cannot tell idle from stuck. It is a nudge to look, not a wake-up.
+        expr: |
+          sum(rate(sephela_jobs_total[30m])) == 0
+            and sum(sephela_queue_depth) > 0
+        for: 30m
+        labels:
+          severity: info
+          component: pipeline
+        annotations:
+          summary: Work is queued but nothing is completing
+          description: >-
+            Messages are waiting and no job has reached a terminal state in 30 minutes.
+            Distinct from an idle platform, because the queue is not empty. Check that
+            workers are consuming the queues they are supposed to.
+
+      - alert: SephelaStageDurationApproachingTimeLimit
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (le, stage) (rate(sephela_stage_duration_seconds_bucket[30m]))
+          ) > 900
+        for: 30m
+        labels:
+          severity: warning
+          component: pipeline
+        annotations:
+          summary: Stage {{ $labels.stage }} is nearing its soft time limit
+          description: >-
+            p95 is above 900s against a 25-minute Celery soft limit. A stage killed by the
+            limit loses its work entirely rather than degrading, so this is worth acting
+            on before it crosses.
+
+  - name: sephela-storage
+    interval: 30s
+    rules:
+      - alert: SephelaStorageUnreachable
+        # Storage is in the readiness probe, so an unreachable bucket takes pods out of
+        # the load balancer. This says why rather than leaving it as generic unreadiness.
+        expr: |
+          sum(rate(http_request_errors_total{path="/health/ready"}[5m])) > 0
+        for: 10m
+        labels:
+          severity: critical
+          component: storage
+        annotations:
+          summary: Readiness is failing
+          description: >-
+            The readiness endpoint is returning errors, which covers postgres, redis, and
+            object storage. On a fresh deployment the usual cause is a bucket name or an
+            IAM policy, since that is the dependency the probe checks last.
+
+  - name: sephela-llm
+    interval: 1m
+    rules:
+      - alert: SephelaLLMCallsFailing
+        expr: sephela:llm_failure_ratio:10m > 0.2
+        for: 15m
+        labels:
+          severity: warning
+          component: ai
+        annotations:
+          summary: A fifth of agent calls are failing
+          description: >-
+            {{ $value | humanizePercentage }} of agent executions failed over 10 minutes.
+            If it is every agent at once, suspect the provider or the credential; if it is
+            one agent, suspect its schema. A model id the provider does not recognise
+            fails uniformly and looks exactly like an outage.
+
+      - alert: SephelaLLMLatencyHigh
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (le) (rate(sephela_llm_call_duration_seconds_bucket[10m]))
+          ) > 120
+        for: 20m
+        labels:
+          severity: warning
+          component: ai
+        annotations:
+          summary: Agent p95 latency above 120s
+          description: >-
+            The AI stage runs six agents in parallel and then two in sequence, so its own
+            timeout is the constraint this eventually breaches.
+
+      - alert: SephelaTokenSpendPerSampleJumped
+        # Cost regressions are silent by nature: nothing breaks, the bill just grows. The
+        # comparison is against the platform's own recent baseline rather than a fixed
+        # threshold, because absolute spend depends on which models are configured.
+        expr: |
+          sephela:tokens_per_sample:6h
+            > 2 * (sephela:tokens_per_sample:6h offset 24h)
+        for: 1h
+        labels:
+          severity: info
+          component: ai
+        annotations:
+          summary: Tokens per analysed sample has doubled against yesterday
+          description: >-
+            {{ $value | humanize }} tokens per sample, against half that a day ago. A
+            prompt change, a model change, or the gateway self-correcting more often —
+            all three cost real money and none of them fails anything.

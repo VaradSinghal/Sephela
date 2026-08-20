@@ -1,0 +1,188 @@
+{
+  "uid": "sephela-analysis-quality",
+  "title": "Sephela — Analysis Quality",
+  "description": "Not whether the platform is up, but whether what it produces is worth trusting. The degradation panels are the point: a healthy pipeline running three of seven stages produces confident-looking scores from a fraction of the evidence.",
+  "tags": ["sephela", "quality"],
+  "timezone": "utc",
+  "editable": true,
+  "schemaVersion": 39,
+  "refresh": "1m",
+  "time": { "from": "now-24h", "to": "now" },
+  "templating": {
+    "list": [
+      {
+        "name": "datasource",
+        "label": "Data source",
+        "type": "datasource",
+        "query": "prometheus",
+        "current": { "text": "Prometheus", "value": "Prometheus" }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "row",
+      "title": "Verdicts",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 }
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Scored samples per hour, by tier",
+      "description": "A sudden shift in the mix usually means the sample population changed or a scoring weight did — not that the malware landscape moved overnight.",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 1 },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (tier) (rate(sephela_risk_tier_total[1h])) * 3600",
+          "legendFormat": "{{tier}}"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "heatmap",
+      "title": "Risk-score distribution",
+      "description": "Buckets follow the tier boundaries rather than being evenly spaced. A distribution piling up against one boundary is a sign the weights need revisiting.",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 1 },
+      "options": { "calculate": false },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (le) (rate(sephela_risk_score_bucket[1h]))",
+          "format": "heatmap",
+          "legendFormat": "{{le}}"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Median risk score (24h)",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 9 },
+      "fieldConfig": { "defaults": { "unit": "short", "min": 0, "max": 100 }, "overrides": [] },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.5, sum by (le) (rate(sephela_risk_score_bucket[24h])))"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "Samples scored (24h)",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 9 },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "targets": [{ "refId": "A", "expr": "sum(increase(sephela_risk_tier_total[24h]))" }]
+    },
+    {
+      "id": 6,
+      "type": "row",
+      "title": "Findings",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 13 }
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Findings per hour, by severity",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 14 },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (severity) (rate(sephela_findings_total[1h])) * 3600",
+          "legendFormat": "{{severity}}"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "Findings per hour, by producing engine",
+      "description": "An engine that stops contributing findings while its stage still reports ok is the failure this panel exists to catch — it looks healthy from every other angle.",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 14 },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (stage) (rate(sephela_findings_total[1h])) * 3600",
+          "legendFormat": "{{stage}}"
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "type": "row",
+      "title": "How much analysis actually ran",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 22 }
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "Stage skip rate",
+      "description": "The share of each stage's executions that were skipped. Dynamic and AI sit near 1.0 on a default install because both are off by default — the signal is a stage that starts being skipped when it was not before.",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 23 },
+      "fieldConfig": { "defaults": { "unit": "percentunit", "min": 0, "max": 1 }, "overrides": [] },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (stage) (rate(sephela_stage_total{status=\"skipped\"}[1h])) / clamp_min(sum by (stage) (rate(sephela_stage_total[1h])), 0.0001)",
+          "legendFormat": "{{stage}}"
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "type": "stat",
+      "title": "Partial jobs (24h)",
+      "description": "Jobs that finished with at least one stage not completing. Expected on a subset deployment; a rise on a full one means stages are dropping out.",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 23 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 0.25 },
+              { "color": "red", "value": 0.6 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(increase(sephela_jobs_total{status=\"partial\"}[24h])) / clamp_min(sum(increase(sephela_jobs_total[24h])), 1)"
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "type": "timeseries",
+      "title": "Findings per scored sample",
+      "description": "How much evidence each verdict rests on. A verdict built from one finding is a much weaker claim than the same score built from twenty, and the score alone does not say which it is.",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 23 },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(sephela_findings_total[1h])) / clamp_min(sum(rate(sephela_risk_tier_total[1h])), 0.0001)"
+        }
+      ]
+    }
+  ]
+}
