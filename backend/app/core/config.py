@@ -132,6 +132,12 @@ class Settings(BaseSettings):
     # Keep decompiled trees after a run for debugging; disable in prod (they are
     # derived from a malware sample).
     keep_engine_artifacts: bool = False
+    # Upper bound on the compressed decompiled-source archive the static stage hands to
+    # code intel through object storage. A tree over the cap is skipped rather than
+    # failing the stage: code intel then runs without it, which costs call-graph and
+    # control-flow depth and never correctness. 256 MiB of gzipped Java is a very large
+    # APK; the cap exists so one pathological sample cannot fill the bucket.
+    max_decompiled_archive_bytes: int = 256 * 1024 * 1024
 
     # ---- Feature flags (Phase-gated capabilities) ----
     # Toggle each capability per environment.
