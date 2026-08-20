@@ -260,6 +260,20 @@ def assert_production_ready(config: Settings) -> None:
                 f"{config.algorithm} (RFC 7518 §3.2). Supply a longer secret."
             )
 
+    # Local-disk storage on a deployed environment is the same class of silent
+    # misconfiguration as a placeholder secret: nothing errors, and every stage that
+    # lands on a different worker than the upload simply cannot find the sample. It
+    # presents as intermittent "APK bytes missing from storage" rather than as the
+    # configuration mistake it is.
+    if config.storage_backend == "local":
+        from app.core.exceptions import ConfigurationError
+
+        raise ConfigurationError(
+            f"Refusing to start in env='{config.env}' with storage_backend='local'. "
+            f"A deployed environment runs more than one worker and local disk is not "
+            f"shared between them; set SEPHELA_STORAGE_BACKEND=s3."
+        )
+
 
 @lru_cache
 def get_settings() -> Settings:

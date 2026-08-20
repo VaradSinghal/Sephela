@@ -18,6 +18,11 @@ def _settings(**overrides) -> Settings:
         "env": "prod",
         "secret_key": "a-real-secret-of-sufficient-length",
         "postgres_password": "a-real-password",
+        # A deployed environment must not be on local disk (see TestStorageBackend),
+        # so the baseline here is a correctly-configured one and each test breaks the
+        # single thing it is about.
+        "storage_backend": "s3",
+        "s3_bucket": "sephela-samples",
     }
     return Settings(**{**base, **overrides})
 
@@ -59,6 +64,29 @@ class TestDeployedEnvironments:
     def test_the_error_names_the_environment(self) -> None:
         with pytest.raises(ConfigurationError, match="staging"):
             assert_production_ready(_settings(env="staging", secret_key="change-me"))
+
+
+class TestStorageBackend:
+    """A deployed environment on local disk is a silent multi-worker failure."""
+
+    @pytest.mark.parametrize("env", ["dev", "staging", "prod"])
+    def test_local_disk_refuses_to_boot_in_a_deployed_environment(self, env: str) -> None:
+        # It presents as intermittent "APK bytes missing from storage" on whichever
+        # stages happened to land on a different worker than the upload — which reads
+        # as a flaky pipeline rather than as the configuration mistake it is.
+        with pytest.raises(ConfigurationError, match="storage_backend"):
+            assert_production_ready(_settings(env=env, storage_backend="local"))
+
+    def test_local_disk_is_fine_locally(self) -> None:
+        assert_production_ready(_settings(env="local", storage_backend="local"))
+
+    def test_s3_boots(self) -> None:
+        assert_production_ready(_settings(storage_backend="s3"))
+
+    def test_the_message_names_the_setting_to_change(self) -> None:
+        # An operator reading this at 3am needs the fix, not just the diagnosis.
+        with pytest.raises(ConfigurationError, match="SEPHELA_STORAGE_BACKEND=s3"):
+            assert_production_ready(_settings(storage_backend="local"))
 
 
 class TestHmacKeyLength:

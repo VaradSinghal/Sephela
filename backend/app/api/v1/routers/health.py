@@ -35,9 +35,30 @@ async def _check_redis() -> DependencyStatus:
         return DependencyStatus(name="redis", healthy=False, detail=str(exc))
 
 
+async def _check_storage() -> DependencyStatus:
+    """Object storage is reachable and the bucket is usable.
+
+    Checked here because a wrong bucket name, an expired credential, or a missing IAM
+    policy is otherwise invisible until the first upload — at which point the failure
+    lands on a user's request rather than on the probe that would have kept this pod
+    out of the load balancer.
+
+    A HEAD on a key that does not exist is the cheapest sufficient probe: it exercises
+    credentials, endpoint, and bucket policy, and ``exists`` returning False is the
+    success case. Only a raised error means the backend is unusable.
+    """
+    from app.storage import get_storage
+
+    try:
+        await get_storage().exists("healthz/.probe")
+        return DependencyStatus(name="storage", healthy=True)
+    except Exception as exc:  # noqa: BLE001
+        return DependencyStatus(name="storage", healthy=False, detail=str(exc))
+
+
 @router.get("/ready", response_model=ReadinessResponse)
 async def readiness() -> ReadinessResponse:
     """All critical dependencies reachable (used by k8s readinessProbe)."""
-    deps = [await _check_db(), await _check_redis()]
+    deps = [await _check_db(), await _check_redis(), await _check_storage()]
     ok = all(d.healthy for d in deps)
     return ReadinessResponse(status="ok" if ok else "degraded", dependencies=deps)

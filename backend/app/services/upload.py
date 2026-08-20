@@ -72,7 +72,11 @@ class UploadService:
             if not await self.storage.exists(key):
                 storage_uri = await self.storage.save(key, data)
             else:
-                storage_uri = f"file://{key}"
+                # Content-addressed, so the stored bytes are already these bytes.
+                # Ask the backend for the URI rather than assembling one: the literal
+                # `file://{key}` this used to build was both scheme-wrong on S3 and
+                # path-wrong on local, where save() returns an absolute path.
+                storage_uri = self.storage.uri_for(key)
             sample = Sample(
                 sha256=hashes.sha256,
                 sha1=hashes.sha1,

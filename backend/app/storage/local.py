@@ -24,7 +24,10 @@ class LocalStorage(StorageBackend):
             path.write_bytes(data)
 
         await asyncio.to_thread(_write)
-        return f"file://{path.resolve()}"
+        return self.uri_for(key)
+
+    def uri_for(self, key: str) -> str:
+        return f"file://{self._path(key).resolve()}"
 
     async def load(self, key: str) -> bytes:
         return await asyncio.to_thread(self._path(key).read_bytes)

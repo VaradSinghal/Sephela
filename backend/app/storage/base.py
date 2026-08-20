@@ -29,10 +29,31 @@ class StorageBackend(ABC):
     async def delete(self, key: str) -> None:
         """Remove the blob at ``key`` (idempotent)."""
 
+    def uri_for(self, key: str) -> str:
+        """The URI ``save`` would return for ``key``, without writing anything.
+
+        Needed because a caller that skips the upload — the sample is already stored,
+        so its bytes are content-identical — still has to record where the bytes are.
+        Building that string at the call site hardcoded ``file://`` and so lied about
+        every S3 deployment.
+        """
+        raise NotImplementedError
+
     @staticmethod
     def sample_key(sha256: str) -> str:
         """Sharded key for a sample by its hash (avoids huge flat dirs)."""
         return f"samples/{sha256[:2]}/{sha256[2:4]}/{sha256}.apk"
+
+    @staticmethod
+    def artifact_key(job_id: str, name: str) -> str:
+        """Sharded key for an intermediate artifact one stage hands to another.
+
+        Keyed by job, like reports and unlike samples: the artifact belongs to a
+        single analysis run, and it is deleted when the last stage that needs it is
+        done rather than retained.
+        """
+        jid = str(job_id)
+        return f"artifacts/{jid[:2]}/{jid}/{name}"
 
     @staticmethod
     def report_key(job_id: str, filename: str) -> str:
