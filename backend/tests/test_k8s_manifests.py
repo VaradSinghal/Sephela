@@ -369,3 +369,210 @@ class TestOverlays:
         text = (_OVERLAYS / "dev" / "kustomization.yaml").read_text()
         assert "SEPHELA_DYNAMIC_ENABLED" in text
         assert "w-dynamic" in text
+
+
+# ---------------------------------------------------------------------------
+# Progressive delivery (opt-in component)
+# ---------------------------------------------------------------------------
+
+_COMPONENTS = Path(__file__).resolve().parents[2] / "infra" / "k8s" / "components"
+_CANARY = _COMPONENTS / "canary"
+
+
+@pytest.fixture(scope="module")
+def canary() -> list[dict[str, Any]]:
+    docs = _load(_CANARY)
+    assert docs, f"no canary manifests found under {_CANARY}"
+    return docs
+
+
+def _of_kind(docs: list[dict[str, Any]], kind: str) -> list[dict[str, Any]]:
+    return [d for d in docs if d.get("kind") == kind]
+
+
+class TestCanaryComponent:
+    """The Argo Rollouts canary for the API.
+
+    Unvalidated against a cluster like everything else here, and additionally unvalidated
+    against an Argo controller — see infra/k8s/README.md. What these checks are good for is
+    the class of mistake that would make the canary a rolling update wearing a canary's
+    clothes: no analysis, an analysis that cannot tell canary pods from stable ones, or a
+    duplicated pod template that drifts away from the posture the rest of this file
+    enforces.
+    """
+
+    def test_it_is_a_component_so_dev_can_stay_on_rolling_updates(self) -> None:
+        # An overlay would apply everywhere it is inherited. Dev runs one replica and no
+        # real traffic, so a canary there gates every deploy on an analysis with no data.
+        doc = yaml.safe_load((_CANARY / "kustomization.yaml").read_text())
+
+        assert doc["kind"] == "Component"
+
+    def test_it_is_not_wired_into_any_overlay_yet(self) -> None:
+        # Referencing it would make that overlay require an Argo Rollouts controller. It
+        # stays opt-in until one is actually installed, which is the honest state.
+        for env in ("dev", "staging", "prod"):
+            doc = yaml.safe_load((_OVERLAYS / env / "kustomization.yaml").read_text())
+            assert "canary" not in str(doc.get("components", [])), env
+
+    def test_only_the_api_gets_a_rollout(self, canary: list[dict[str, Any]]) -> None:
+        # Workers are queue consumers with no inbound traffic to split, so a canary there
+        # measures nothing: a bad worker build fails the tasks it picks up regardless of
+        # how many replicas carry it.
+        rollouts = _of_kind(canary, "Rollout")
+
+        assert [_name(r) for r in rollouts] == ["sephela-api"]
+
+    def test_the_rollout_reuses_the_deployments_pod_template(
+        self, canary: list[dict[str, Any]]
+    ) -> None:
+        # An inline template here would be a second copy of the security context, the
+        # probes, and the resource limits — and the copy would drift out from under every
+        # posture check in this file, which only sees the manifests it is given.
+        (rollout,) = _of_kind(canary, "Rollout")
+        ref = rollout["spec"]["workloadRef"]
+
+        assert (ref["kind"], ref["name"]) == ("Deployment", "sephela-api")
+        assert "template" not in rollout["spec"]
+
+    def test_the_rollout_selects_the_same_pods_as_the_service(
+        self, canary: list[dict[str, Any]], manifests: list[dict[str, Any]]
+    ) -> None:
+        (rollout,) = _of_kind(canary, "Rollout")
+        service = next(s for s in _of(manifests, "Service") if _name(s) == "sephela-api")
+
+        assert rollout["spec"]["selector"]["matchLabels"] == service["spec"]["selector"]
+
+    def test_the_canary_never_drops_below_current_capacity(
+        self, canary: list[dict[str, Any]]
+    ) -> None:
+        # Same rule the Deployment's rolling update follows. A canary that takes a pod out
+        # first is a canary that reduces capacity to test capacity.
+        (rollout,) = _of_kind(canary, "Rollout")
+
+        assert rollout["spec"]["strategy"]["canary"]["maxUnavailable"] == 0
+
+    def test_every_step_is_gated_by_an_analysis(self, canary: list[dict[str, Any]]) -> None:
+        # Steps without analysis are a slow rolling update. The analysis is the only thing
+        # that makes this progressive *delivery* rather than progressive waiting.
+        (rollout,) = _of_kind(canary, "Rollout")
+        strategy = rollout["spec"]["strategy"]["canary"]
+
+        assert strategy["analysis"]["templates"], "no analysis template referenced"
+        assert strategy["steps"], "no canary steps"
+
+    def test_the_referenced_analysis_template_exists(self, canary: list[dict[str, Any]]) -> None:
+        (rollout,) = _of_kind(canary, "Rollout")
+        referenced = {
+            t["templateName"] for t in rollout["spec"]["strategy"]["canary"]["analysis"]["templates"]
+        }
+        defined = {_name(t) for t in _of_kind(canary, "AnalysisTemplate")}
+
+        assert referenced <= defined, referenced - defined
+
+    def test_every_weight_step_is_followed_by_a_pause(self, canary: list[dict[str, Any]]) -> None:
+        # Shifting weight and immediately shifting again gives the analysis nothing to
+        # read, so the run succeeds for want of evidence rather than because the build is
+        # good.
+        (rollout,) = _of_kind(canary, "Rollout")
+        steps = rollout["spec"]["strategy"]["canary"]["steps"]
+
+        for index, step in enumerate(steps):
+            if "setWeight" in step and index + 1 < len(steps):
+                assert "pause" in steps[index + 1], f"step {index} shifts weight without pausing"
+
+    def test_the_weights_only_increase(self, canary: list[dict[str, Any]]) -> None:
+        weights = [
+            s["setWeight"]
+            for s in rollout_steps(canary)
+            if "setWeight" in s
+        ]
+
+        assert weights == sorted(weights), weights
+        assert weights[-1] < 100, "the final step should not pre-empt the full promotion"
+
+    def test_the_analysis_can_distinguish_canary_pods_from_stable_ones(
+        self, canary: list[dict[str, Any]]
+    ) -> None:
+        # The single most important property. A selector without this filter reads the
+        # fleet average, so a bad canary hides behind the pods it has not replaced yet and
+        # the analysis passes every time.
+        #
+        # Counted rather than merely present: the error-rate query references two metrics
+        # and needs the filter on both, and an `in query` check passes when only one has it.
+        (template,) = _of_kind(canary, "AnalysisTemplate")
+
+        for metric in template["spec"]["metrics"]:
+            query = metric["provider"]["prometheus"]["query"]
+            selectors = query.count("http_")
+            filters = query.count("rollouts_pod_template_hash")
+            assert filters == selectors, (
+                f"{metric['name']}: {selectors} metric selectors but {filters} canary "
+                f"filters — an unfiltered one measures the whole fleet"
+            )
+
+    def test_the_rollout_supplies_the_hashes_the_template_expects(
+        self, canary: list[dict[str, Any]]
+    ) -> None:
+        (rollout,) = _of_kind(canary, "Rollout")
+        (template,) = _of_kind(canary, "AnalysisTemplate")
+
+        supplied = {a["name"] for a in rollout["spec"]["strategy"]["canary"]["analysis"]["args"]}
+        expected = {a["name"] for a in template["spec"]["args"]}
+
+        assert expected <= supplied, expected - supplied
+
+    def test_every_analysis_metric_queries_something_the_api_emits(
+        self, canary: list[dict[str, Any]]
+    ) -> None:
+        # The same check test_dashboards.py makes, for the same reason: a metric nothing
+        # emits produces an empty result, and an analysis with no data cannot fail.
+        (template,) = _of_kind(canary, "AnalysisTemplate")
+        emitted = ("http_requests_total", "http_request_errors_total", "http_request_duration_seconds")
+
+        for metric in template["spec"]["metrics"]:
+            query = metric["provider"]["prometheus"]["query"]
+            assert any(name in query for name in emitted), f"{metric['name']} queries nothing real"
+
+    def test_no_metric_aborts_on_a_single_bad_scrape(self, canary: list[dict[str, Any]]) -> None:
+        # One breach during a deploy is pods starting and connections draining. Aborting on
+        # it makes every rollout a coin toss.
+        (template,) = _of_kind(canary, "AnalysisTemplate")
+
+        for metric in template["spec"]["metrics"]:
+            assert metric.get("failureLimit", 0) >= 2, metric["name"]
+
+    def test_the_error_rate_metric_guards_its_denominator(
+        self, canary: list[dict[str, Any]]
+    ) -> None:
+        # A canary with no traffic yet divides by zero. Unguarded, that is either a
+        # spurious abort or a silent pass, depending on which way the NaN falls.
+        (template,) = _of_kind(canary, "AnalysisTemplate")
+        error_rate = next(m for m in template["spec"]["metrics"] if m["name"] == "error-rate")
+
+        assert "clamp_min" in error_rate["provider"]["prometheus"]["query"]
+
+    def test_the_hpa_is_retargeted_at_the_rollout(self) -> None:
+        # Left on the Deployment, the HPA fights Argo: Argo scales the Deployment to zero,
+        # the HPA scales it back up, and the cluster runs a managed and an unmanaged copy
+        # of the API at once.
+        doc = yaml.safe_load((_CANARY / "kustomization.yaml").read_text())
+        patches = str(doc.get("patches", []))
+
+        assert "HorizontalPodAutoscaler" in patches
+        assert "Rollout" in patches
+
+    def test_the_component_does_not_patch_the_base_deployment(self) -> None:
+        # Argo scales it down itself on adoption. Declaring `replicas: 0` here would
+        # duplicate that decision and leave the base manifest looking broken to anyone
+        # reading it without this component applied.
+        doc = yaml.safe_load((_CANARY / "kustomization.yaml").read_text())
+
+        for patch in doc.get("patches", []):
+            assert patch["target"]["kind"] != "Deployment", patch
+
+
+def rollout_steps(canary: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    (rollout,) = [d for d in canary if d.get("kind") == "Rollout"]
+    steps: list[dict[str, Any]] = rollout["spec"]["strategy"]["canary"]["steps"]
+    return steps

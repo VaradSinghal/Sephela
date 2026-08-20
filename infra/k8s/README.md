@@ -11,7 +11,7 @@ deploy.sh                verify signature → render → migrate → apply → w
 
 ## What has and has not been verified
 
-**Verified in CI** (`backend/tests/test_k8s_manifests.py`, 37 checks): YAML parses;
+**Verified in CI** (`backend/tests/test_k8s_manifests.py`, 54 checks): YAML parses;
 every object names its namespace and is unique; Deployment selectors match their own
 pod templates; Services select something; `envFrom` ConfigMaps/Secrets exist; every
 `SEPHELA_*` key maps to a real `Settings` field; autoscaler targets exist and no
@@ -39,6 +39,46 @@ expected to need correction on first apply:
 - Service DNS names assume Postgres/Redis/Qdrant run in a `sephela-data` namespace.
   Managed services need those `sephela-config` values repointed.
 
+## Progressive delivery (opt-in, and not yet enabled)
+
+`infra/k8s/components/canary/` holds an Argo Rollouts canary for the **API only**. Workers
+are queue consumers with no inbound traffic to split — a bad worker build fails the tasks it
+picks up regardless of how many replicas carry it — so their protection stays
+`maxUnavailable: 0` plus the stage-failure metrics, which is the right shape for a consumer.
+
+It is a kustomize *component* and **no overlay references it**. Enabling it makes that
+overlay require an Argo Rollouts controller, so it stays opt-in until one is installed:
+
+```yaml
+# infra/k8s/overlays/prod/kustomization.yaml
+components:
+  - ../../components/canary
+```
+
+The design, and the two things most likely to be wrong on a first apply:
+
+- **The pod template is not duplicated.** The Rollout adopts the existing Deployment through
+  `workloadRef`, so the security context, probes, and resource limits stay in one place. A
+  copy would drift out from under every posture check in the test suite, which only sees the
+  manifests it is given.
+- **Weights are approximate.** There is no service mesh, so both ReplicaSets sit behind the
+  same Service and traffic splits by pod count. At 3 replicas the granularity is 33%, so
+  `setWeight: 25` means one canary pod and roughly a third of the traffic. Precise weights
+  need an SMI, Istio, or ALB `trafficRouting` provider.
+- **`rollouts_pod_template_hash` must reach the application's metrics.** Every analysis query
+  filters on it, and the app cannot add it — a pod does not know its own ReplicaSet hash. It
+  comes from Prometheus relabeling pod labels onto scraped series. Without it every query
+  returns the fleet average, the analysis passes whatever the canary is doing, and this is a
+  rolling update wearing a canary's clothes. Verify with
+  `sum by (rollouts_pod_template_hash) (http_requests_total)` returning more than one series
+  during a rollout **before** trusting any of it.
+
+The analysis gates on error rate, p95 latency, and readiness failures — all API-level, all
+measurable within a canary window. It deliberately does not gate on risk scores or finding
+counts: a canary runs for minutes and so does a job, so those have no meaningful sample in
+that window and would either never trip or trip on noise. They belong on the Analysis
+Quality dashboard, watched over hours.
+
 ## Cluster prerequisites
 
 | Requirement | Why |
@@ -49,6 +89,7 @@ expected to need correction on first apply:
 | Node pool labelled `sephela.dev/workload=malware-sandbox`, tainted `sephela.dev/malware-sandbox` | Malware isolation |
 | KubeVirt device plugin exposing `/dev/kvm` | Emulator |
 | ingress-nginx + cert-manager (`letsencrypt-prod`) | TLS termination |
+| Argo Rollouts controller — **only if** the canary component is enabled | Progressive delivery |
 | Namespaces `sephela-data`, `observability`, `ingress-nginx` labelled with `kubernetes.io/metadata.name` | NetworkPolicy selectors |
 
 ## Deploying

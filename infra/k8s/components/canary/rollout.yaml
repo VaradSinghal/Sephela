@@ -1,0 +1,63 @@
+# Progressive delivery for the API, via Argo Rollouts.
+#
+# The API only. Workers are queue consumers with no inbound traffic to split, so a canary
+# there would measure nothing: a bad worker build fails the tasks it picks up regardless of
+# how many replicas carry it. Their protection is `maxUnavailable: 0` rolling updates plus
+# the stage-level failure metrics, which is the right shape for a consumer.
+#
+# `workloadRef` rather than an inline pod template. Copying the Deployment's template here
+# would create a second copy of the security context, the probes, and the resource limits,
+# and the copy would drift — the k8s manifest tests check the posture of what they can see,
+# and a drifted duplicate is exactly what they would miss. Argo scales the referenced
+# Deployment to zero and manages its own ReplicaSets from that template.
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
+metadata:
+  name: sephela-api
+  namespace: sephela
+  labels: { app: sephela-api }
+spec:
+  replicas: 3
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels: { app: sephela-api }
+  workloadRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: sephela-api
+    # Argo owns the Deployment's scale once it adopts it.
+    scaleDown: onsuccess
+  strategy:
+    canary:
+      # No service mesh, so this is a replica-count canary: both ReplicaSets sit behind
+      # the same Service and traffic splits in proportion to pod count. Which means the
+      # weights are approximate — at 3 replicas the granularity is 33%, so `setWeight: 25`
+      # produces one canary pod and roughly a third of the traffic. Precise weights need
+      # SMI, Istio, or an ALB TrafficRouting provider; see infra/k8s/README.md.
+      maxSurge: 1
+      maxUnavailable: 0
+      # Analysis runs alongside the steps rather than as a step of its own, so a breach at
+      # any weight aborts immediately instead of only at the next gate.
+      analysis:
+        templates:
+          - templateName: sephela-api-canary
+        startingStep: 1
+        args:
+          - name: canary-hash
+            valueFrom:
+              podTemplateHashValue: Latest
+          - name: stable-hash
+            valueFrom:
+              podTemplateHashValue: Stable
+      steps:
+        # One pod, held long enough for the analysis to have data. A shorter pause than the
+        # metric window means the first evaluation reads an empty range and the run passes
+        # for want of evidence rather than because the build is good.
+        - setWeight: 25
+        - pause: { duration: 5m }
+        - setWeight: 50
+        - pause: { duration: 5m }
+        - setWeight: 75
+        - pause: { duration: 3m }
+      # A breach rolls back to the stable ReplicaSet without waiting for anyone.
+      abortScaleDownDelaySeconds: 30

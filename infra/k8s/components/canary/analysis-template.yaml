@@ -1,0 +1,95 @@
+# What decides whether a canary is allowed to proceed.
+#
+# Three metrics, and the choice of which three is the whole design. Each one has to be able
+# to distinguish canary pods from stable ones, or the analysis measures the fleet average
+# and a bad canary hides behind the pods it has not replaced yet. That is why every query
+# filters on `{{args.canary-hash}}` — see the prerequisite note at the bottom.
+#
+# What is deliberately *not* here: anything about analysis quality. A canary runs for
+# minutes and a job takes minutes, so risk scores and finding counts have no meaningful
+# sample in that window. Gating on them would either never trip or trip on noise. Those
+# live on the Analysis Quality dashboard, watched over hours.
+apiVersion: argoproj.io/v1alpha1
+kind: AnalysisTemplate
+metadata:
+  name: sephela-api-canary
+  namespace: sephela
+spec:
+  args:
+    - name: canary-hash
+    - name: stable-hash
+  metrics:
+    # ---- Errors ----
+    - name: error-rate
+      # Evaluated every 30s; three consecutive breaches abort. One breach is a deploy
+      # blip — pods starting, connections draining — and aborting on it makes every
+      # rollout a coin toss.
+      interval: 30s
+      failureLimit: 3
+      # A canary with no traffic yet has an undefined error rate. Treating that as a
+      # failure would abort every rollout during its first interval; treating it as
+      # success would pass a canary nothing ever reached. Inconclusive is the honest
+      # answer, and Argo waits rather than deciding.
+      inconclusiveLimit: 5
+      successCondition: result[0] <= 0.02
+      provider:
+        prometheus:
+          address: http://prometheus-operated.monitoring.svc.cluster.local:9090
+          query: |
+            sum(rate(http_request_errors_total{
+              rollouts_pod_template_hash="{{args.canary-hash}}",
+              status=~"5.."
+            }[2m]))
+            /
+            clamp_min(sum(rate(http_requests_total{
+              rollouts_pod_template_hash="{{args.canary-hash}}"
+            }[2m])), 0.0001)
+
+    # ---- Latency ----
+    - name: p95-latency
+      interval: 30s
+      failureLimit: 3
+      inconclusiveLimit: 5
+      # Absolute rather than relative to stable. A relative threshold sounds better but
+      # divides by a stable p95 that is itself noisy at low traffic, which produces
+      # spurious aborts on a quiet cluster far more often than it catches a regression.
+      successCondition: result[0] <= 1.5
+      provider:
+        prometheus:
+          address: http://prometheus-operated.monitoring.svc.cluster.local:9090
+          query: |
+            histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{
+              rollouts_pod_template_hash="{{args.canary-hash}}"
+            }[2m])))
+
+    # ---- Readiness ----
+    - name: readiness-failures
+      # The canary's own dependency checks. A build that cannot reach Postgres, Redis, or
+      # object storage fails readiness and never takes traffic, so the two metrics above
+      # stay clean while the rollout stalls — this is what names the actual cause. It is
+      # also the check that catches a bad storage configuration, since that is the
+      # dependency the probe reaches last.
+      interval: 30s
+      failureLimit: 2
+      successCondition: result[0] == 0
+      provider:
+        prometheus:
+          address: http://prometheus-operated.monitoring.svc.cluster.local:9090
+          query: |
+            sum(rate(http_request_errors_total{
+              rollouts_pod_template_hash="{{args.canary-hash}}",
+              path="/api/v1/health/ready"
+            }[2m])) or vector(0)
+# Prerequisite, and the part most likely to be wrong on a first install:
+#
+# `rollouts_pod_template_hash` has to be present on the application's own series. The app
+# does not add it — a pod cannot know its own ReplicaSet hash — so it comes from Prometheus
+# service discovery relabeling pod labels onto scraped metrics. With the Prometheus operator
+# that is a `podMetricsEndpoints` relabeling; with a plain scrape config it is a
+# `kubernetes_sd_config` role: pod plus a `labelmap` on
+# `__meta_kubernetes_pod_label_(.+)`.
+#
+# Without it every query above returns the fleet average, the analysis passes whatever the
+# canary is doing, and the rollout is a rolling update wearing a canary's clothes. Verify
+# with `sum by (rollouts_pod_template_hash) (http_requests_total)` returning more than one
+# series during a rollout before trusting any of this.

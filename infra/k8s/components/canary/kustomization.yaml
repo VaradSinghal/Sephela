@@ -1,0 +1,30 @@
+# A kustomize Component rather than an overlay, so staging and prod opt in with one line
+# and dev stays on plain rolling updates. Dev runs one replica and no meaningful traffic,
+# so a canary there would gate every deploy on an analysis that has no data to read.
+#
+# The base Deployment is deliberately left alone. Argo adopts it through `workloadRef` and
+# scales it to zero itself (`scaleDown: onsuccess`), so patching `replicas: 0` here would
+# only duplicate a decision the controller already makes — and it would leave the base
+# manifest looking broken to anyone reading it without this component applied.
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+
+resources:
+  - rollout.yaml
+  - analysis-template.yaml
+
+patches:
+  # This one is not optional. Left pointing at the Deployment, the HPA fights Argo: Argo
+  # scales the Deployment to zero on adoption, the HPA reads 0 of 3 desired and scales it
+  # back up, and the cluster ends up running a managed and an unmanaged copy of the API at
+  # the same time. Argo exposes a scale subresource for exactly this.
+  - target:
+      kind: HorizontalPodAutoscaler
+      name: sephela-api
+    patch: |
+      - op: replace
+        path: /spec/scaleTargetRef
+        value:
+          apiVersion: argoproj.io/v1alpha1
+          kind: Rollout
+          name: sephela-api
