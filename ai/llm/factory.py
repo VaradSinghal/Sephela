@@ -343,15 +343,19 @@ class LLMGateway:
             except Exception as exc:  # noqa: BLE001
                 last_error = exc
                 delay = self._base_retry_delay * (2**attempt)
+                will_retry = attempt < self._max_retries - 1
+                # The message has to match what happens next. Announcing a retry on the
+                # final attempt sends whoever is reading the log looking for one, which is
+                # a real cost during exactly the debugging this line exists for.
                 _LOG.warning(
-                    "LLM attempt %d/%d failed for model %s: %s — retrying in %.1fs",
+                    "LLM attempt %d/%d failed for model %s: %s%s",
                     attempt + 1,
                     self._max_retries,
                     model_name,
                     exc,
-                    delay,
+                    f" — retrying in {delay:.1f}s" if will_retry else " — no attempts left",
                 )
-                if attempt < self._max_retries - 1:
+                if will_retry:
                     await asyncio.sleep(delay)
         else:
             # All retries exhausted

@@ -57,6 +57,13 @@ test-ai:       ## Run the GenAI, scoring, and RAG suites
 rag-ingest:    ## Ingest the knowledge corpus into the configured vector store
 	python -m ai.rag
 
+verify-llm:    ## Check the GenAI stage against a real provider (needs an API key)
+	@# One agent, one small envelope, a few thousand tokens. No hermetic test can check
+	@# the provider contract — a valid credential with a slug that 404s looks exactly like
+	@# a wiring bug from inside the app — and finding that out via a full pipeline run
+	@# costs minutes and reports as a failed stage rather than as a bad credential.
+	python -m ai.verify_live
+
 sandbox-build: ## Build the isolated dynamic-analysis sandbox image (needs KVM)
 	$(SANDBOX_COMPOSE) build
 

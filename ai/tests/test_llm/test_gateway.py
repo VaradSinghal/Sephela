@@ -273,6 +273,30 @@ class TestRetries:
         assert len(provider.requests) == 2
         assert result.attempts == 2
 
+    async def test_the_final_failure_does_not_announce_a_retry(self, caplog) -> None:
+        # The message has to match what happens next. Announcing a retry on the last
+        # attempt sends whoever is reading the log looking for one — a real cost during
+        # exactly the debugging the line exists for.
+        import logging
+
+        provider = FakeProvider(ProviderName.ANTHROPIC, supports=("claude",), fail_times=99)
+
+        with caplog.at_level(logging.WARNING), pytest.raises(RuntimeError):
+            await _generate(_gateway(provider, max_retries=1))
+
+        assert "no attempts left" in caplog.text
+        assert "retrying in" not in caplog.text
+
+    async def test_a_non_final_failure_does_announce_the_retry(self, caplog) -> None:
+        import logging
+
+        provider = FakeProvider(ProviderName.ANTHROPIC, supports=("claude",), fail_times=1)
+
+        with caplog.at_level(logging.WARNING):
+            await _generate(_gateway(provider, max_retries=3))
+
+        assert "retrying in" in caplog.text
+
     async def test_exhausting_the_retries_raises_with_the_model_named(self) -> None:
         provider = FakeProvider(ProviderName.ANTHROPIC, supports=("claude",), fail_times=99)
 

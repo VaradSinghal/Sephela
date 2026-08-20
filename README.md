@@ -144,6 +144,21 @@ missing rather than failing the stage).
 `make install-ai` is not optional for the backend suite: `app.tasks.ai` imports the
 `ai` package, so collection fails without it.
 
+To turn the multi-agent stage on, check the credential first:
+
+```bash
+export OPENROUTER_API_KEY=...   # or ANTHROPIC_API_KEY / OPENAI_API_KEY
+make verify-llm                 # one agent, one small envelope, a few thousand tokens
+```
+
+It reports which provider was registered, which model slug was selected for it, whether the
+provider accepted the request, whether token usage came back from the provider or was
+estimated, and what the validation layer thought of the answer. Worth running before
+uploading an APK with `SEPHELA_AI_ENABLED=true`: no test can check the provider contract —
+a valid credential with a slug the provider does not recognise looks exactly like a wiring
+bug from inside the application — and discovering it through a pipeline run costs minutes
+and reports as a failed stage rather than as a bad credential.
+
 Storage is on local disk by default, which is correct for a single-process laptop stack and
 wrong for anything else: with two workers the stage that stored a sample and the stage that
 reads it are only sometimes the same machine. Any environment other than `local` refuses to
