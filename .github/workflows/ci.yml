@@ -254,3 +254,23 @@ jobs:
         run: cd frontend && npm run typecheck
       - name: Prettier format check
         run: cd frontend && npx prettier --check "src/**/*.{ts,tsx,css,json}"
+
+  # ──────────────────────────────────────────────
+  # Frontend: unit tests
+  # ──────────────────────────────────────────────
+  frontend-test:
+    name: Frontend Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install dependencies
+        run: cd frontend && npm ci
+      # jsdom, so there is no browser to install and no backend to stand up. Every
+      # network call is stubbed at `fetch`.
+      - name: Vitest
+        run: cd frontend && npm run test:run

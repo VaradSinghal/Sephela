@@ -112,6 +112,9 @@ contract-test: ## Run schemathesis contract tests against the OpenAPI spec
 lint-fe:       ## Lint + type-check frontend
 	cd frontend && npm run lint && npm run typecheck
 
+test-fe:       ## Run frontend unit tests (vitest, jsdom — no browser, no backend)
+	cd frontend && npm run test:run
+
 fmt-fe:        ## Format frontend with Prettier
 	cd frontend && npm run format
 
@@ -128,3 +131,4 @@ ci-gates:      ## Run ALL CI gates locally (lint, type, test, security, import, 
 	$(MAKE) import-lint
 	$(MAKE) lint-fe
 	$(MAKE) fmt-fe-check
+	$(MAKE) test-fe
