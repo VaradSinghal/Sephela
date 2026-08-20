@@ -464,7 +464,8 @@ class TestCanaryComponent:
     def test_the_referenced_analysis_template_exists(self, canary: list[dict[str, Any]]) -> None:
         (rollout,) = _of_kind(canary, "Rollout")
         referenced = {
-            t["templateName"] for t in rollout["spec"]["strategy"]["canary"]["analysis"]["templates"]
+            t["templateName"]
+            for t in rollout["spec"]["strategy"]["canary"]["analysis"]["templates"]
         }
         defined = {_name(t) for t in _of_kind(canary, "AnalysisTemplate")}
 
@@ -482,11 +483,7 @@ class TestCanaryComponent:
                 assert "pause" in steps[index + 1], f"step {index} shifts weight without pausing"
 
     def test_the_weights_only_increase(self, canary: list[dict[str, Any]]) -> None:
-        weights = [
-            s["setWeight"]
-            for s in rollout_steps(canary)
-            if "setWeight" in s
-        ]
+        weights = [s["setWeight"] for s in rollout_steps(canary) if "setWeight" in s]
 
         assert weights == sorted(weights), weights
         assert weights[-1] < 100, "the final step should not pre-empt the full promotion"
@@ -528,7 +525,11 @@ class TestCanaryComponent:
         # The same check test_dashboards.py makes, for the same reason: a metric nothing
         # emits produces an empty result, and an analysis with no data cannot fail.
         (template,) = _of_kind(canary, "AnalysisTemplate")
-        emitted = ("http_requests_total", "http_request_errors_total", "http_request_duration_seconds")
+        emitted = (
+            "http_requests_total",
+            "http_request_errors_total",
+            "http_request_duration_seconds",
+        )
 
         for metric in template["spec"]["metrics"]:
             query = metric["provider"]["prometheus"]["query"]

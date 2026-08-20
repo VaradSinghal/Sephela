@@ -394,4 +394,14 @@ ai/
 
 # Conclusion
 
+**Correction (2026-08).** This document described the intended design, and for a long time
+the design and the code disagreed on the one point that mattered: `BaseAgent._call_llm`
+raised `NotImplementedError` unconditionally and no agent overrode it, so no agent could
+call a model at all. The `ResponseValidator` flow diagrammed above was likewise never
+reached — `ai/validation/` was complete, tested in isolation, and called from nowhere. Both
+are now wired, so the description below is of the running system rather than of the plan.
+Two further gaps closed with them: token accounting came from `len(prompt)//4` rather than
+the provider, and `AgentModelConfig` named Anthropic-spelled models regardless of which
+provider was registered, which made every agent call fail on an OpenRouter-only deployment.
+
 The GenAI Analysis Layer is functionally complete, structured, and ready to be integrated into the main pipeline task runner. Thanks to its provider-agnostic gateway, the validation pipeline, and the LangGraph orchestration flow, the system is robust against typical agent failure modes (e.g. malformed model outputs or endpoint failures). The implementation provides a solid foundation for the remainder of the Sephela engine development lifecycle.
