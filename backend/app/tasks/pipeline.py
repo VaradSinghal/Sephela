@@ -60,6 +60,7 @@ from sqlalchemy.orm import selectinload
 
 from app.core.config import settings
 from app.core.logging import get_logger
+from app.core.pipeline_metrics import record_job
 from app.db.models.analysis import AnalysisJob, JobStatus, StageRun, StageStatus
 from app.db.session import AsyncSessionLocal
 from app.tasks.ai import analyze_ai
@@ -150,6 +151,12 @@ async def _finalize(job_id: str) -> str:
             status=job.status.value,
             stages={s.engine_name: s.status.value for s in stages},
         )
+        # From the job's own timestamps, not a perf_counter: a job spans several tasks
+        # on several workers, so no single process observes the whole span.
+        elapsed = None
+        if job.started_at is not None and job.completed_at is not None:
+            elapsed = max(0.0, (job.completed_at - job.started_at).total_seconds())
+        record_job(job.status.value, duration_seconds=elapsed)
         return job.status.value
 
 

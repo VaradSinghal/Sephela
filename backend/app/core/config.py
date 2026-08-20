@@ -160,6 +160,14 @@ class Settings(BaseSettings):
     otel_service_name: str = "sephela-api"
     otel_exporter_endpoint: str | None = None  # e.g. http://localhost:4317
     metrics_enabled: bool = False
+    # Celery workers serve no HTTP, so they cannot hang /metrics off the ASGI app the
+    # way the API does. When metrics are enabled each worker starts a minimal exporter
+    # on this port instead, found through the same pod annotation as the API's.
+    worker_metrics_port: int = 9100
+    # How often the queue-depth gauge is refreshed. A gauge, not a counter, so it is
+    # sampled rather than accumulated — and polling the broker more often than
+    # Prometheus scrapes it buys nothing.
+    queue_depth_interval_secs: int = 30
 
     @computed_field  # type: ignore[prop-decorator]
     @property

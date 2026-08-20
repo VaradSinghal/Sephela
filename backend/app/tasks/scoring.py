@@ -32,6 +32,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.logging import get_logger
+from app.core.pipeline_metrics import record_risk
 from app.db.models.analysis import AnalysisJob, Finding, JobStatus, StageStatus
 from app.db.session import AsyncSessionLocal
 from app.repositories.evidence import EvidenceRepository, FindingRepository
@@ -279,6 +280,7 @@ async def _execute(
         tier=result.tier.value,
         findings=len(findings),
     )
+    record_risk(result.final_score, result.tier.value)
     await stage.set_progress(85)
     return outcome
 

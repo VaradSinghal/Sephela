@@ -13,6 +13,7 @@ from ai.integration import SephelaAnalysisPipeline
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.logging import get_logger
+from app.core.pipeline_metrics import record_llm_call
 from app.db.models.analysis import AnalysisJob, JobStatus, Sample
 from app.db.session import AsyncSessionLocal
 from app.repositories.evidence import EvidenceRepository
@@ -91,6 +92,8 @@ async def _execute(
                     f["id"] = f"{agent_name}-{len(all_findings)}"
                 all_findings.append(f)
 
+        _record_agent_costs(result.agent_results)
+
         # Construct the payload for persistence
         payload = {
             "envelope_version": "1.0.0",
@@ -108,6 +111,31 @@ async def _execute(
     except Exception as exc:
         logger.exception("ai_pipeline_error", job_id=job_id)
         return await stage.fail(exc)
+
+
+def _record_agent_costs(agent_results: dict[str, Any]) -> None:
+    """Publish per-agent token spend and latency.
+
+    This is the only place the platform can see what a paid credential is costing:
+    eight agents per job, each on its own model, and the gateway's own retry and
+    self-correction turns are already folded into the totals the agents report. Without
+    it, cost per analysis is a line on an invoice rather than a metric.
+    """
+    for agent_name, entry in agent_results.items():
+        if not isinstance(entry, dict):
+            continue
+        elapsed_ms = entry.get("execution_time_ms")
+        record_llm_call(
+            # Unknown rather than omitted, so a misconfigured model still shows up as a
+            # series instead of silently costing nothing.
+            model=str(entry.get("model_name") or "unknown"),
+            agent=str(entry.get("agent_name") or agent_name),
+            outcome=str(entry.get("status") or "unknown"),
+            tokens=int(entry.get("tokens_used") or 0),
+            duration_seconds=(elapsed_ms / 1000.0)
+            if isinstance(elapsed_ms, (int, float))
+            else None,
+        )
 
 
 @celery_app.task(name="ai.analyze", bind=True, max_retries=1)

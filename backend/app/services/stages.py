@@ -17,6 +17,7 @@ Contract reference: docs/architecture/03-communication.md, 05-messaging.md.
 
 from __future__ import annotations
 
+import time
 import uuid
 from dataclasses import dataclass
 from typing import Any
@@ -24,6 +25,7 @@ from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.logging import get_logger
+from app.core.pipeline_metrics import record_findings, record_stage
 from app.db.models.analysis import AnalysisJob, Finding, StageStatus
 from app.repositories.evidence import EvidenceRepository, FindingRepository
 from app.repositories.samples import JobRepository
@@ -85,6 +87,15 @@ def envelope_error_summary(payload: dict[str, Any]) -> str | None:
     if not parts:
         return None
     return "; ".join(parts)[:MAX_ERROR_CHARS]
+
+
+def _severity_counts(rows: list[Finding]) -> dict[str, int]:
+    """Findings per severity, for the metric. Drawn from a closed set, so bounded."""
+    counts: dict[str, int] = {}
+    for row in rows:
+        key = getattr(row.severity, "value", row.severity)
+        counts[str(key)] = counts.get(str(key), 0) + 1
+    return counts
 
 
 def normalize_findings(
@@ -182,10 +193,17 @@ class StageRunner:
         self.engine_version = engine_version
         self.jobs = JobRepository(session)
         self._stage_id: uuid.UUID | None = None
+        # Measured here rather than from the DB timestamps: those are written by
+        # different statements and can straddle a commit, and on a multi-worker
+        # deployment they can come from clocks that disagree.
+        self._started_at: float | None = None
+        self._attempt = 1
 
     async def begin(self) -> uuid.UUID:
         stage = await self.jobs.start_stage(self.job_id, self.engine_name, self.engine_version)
         self._stage_id = stage.id
+        self._started_at = time.perf_counter()
+        self._attempt = stage.attempt
         await self.session.commit()
         logger.info(
             "stage_started",
@@ -229,6 +247,8 @@ class StageRunner:
             status=status.value,
             findings=count,
         )
+        self._record(status.value)
+        record_findings(self.engine_name, _severity_counts(rows))
         return StageOutcome(
             engine=self.engine_name,
             status=status,
@@ -246,6 +266,7 @@ class StageRunner:
         logger.warning(
             "stage_failed", job_id=str(self.job_id), engine=self.engine_name, error=message
         )
+        self._record(StageStatus.failed.value)
         return StageOutcome(engine=self.engine_name, status=StageStatus.failed, error=message)
 
     async def skip(self, reason: str) -> StageOutcome:
@@ -263,6 +284,9 @@ class StageRunner:
         logger.info(
             "stage_skipped", job_id=str(self.job_id), engine=self.engine_name, reason=reason
         )
+        # Recorded like any other outcome. How often a deployment runs partial is one of
+        # the more useful things to know about it, and an absent series cannot say.
+        record_stage(self.engine_name, StageStatus.skipped.value)
         return StageOutcome(engine=self.engine_name, status=StageStatus.skipped, error=reason)
 
     async def set_progress(self, progress: int) -> None:
@@ -271,6 +295,11 @@ class StageRunner:
             return
         job.progress = max(0, min(100, progress))
         await self.session.commit()
+
+    def _record(self, status: str) -> None:
+        """Emit the stage's terminal metrics. Never raises — see pipeline_metrics."""
+        elapsed = None if self._started_at is None else time.perf_counter() - self._started_at
+        record_stage(self.engine_name, status, duration_seconds=elapsed, attempt=self._attempt)
 
     async def _require_stage(self) -> Any:
         if self._stage_id is None:
