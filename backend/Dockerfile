@@ -16,6 +16,7 @@ WORKDIR /app
 # System deps kept minimal; add build tooling only in a builder layer if needed.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl unzip default-jre-headless \
+    libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz0b libfontconfig1 \
     && rm -rf /var/lib/apt/lists/*
 
 RUN curl -L -o jadx.zip https://github.com/skylot/jadx/releases/download/v1.4.7/jadx-1.4.7.zip \
@@ -40,7 +41,7 @@ RUN pip install /opt/engines/dynamic
 COPY engines/threat_intel /opt/engines/threat_intel
 RUN pip install /opt/engines/threat_intel
 COPY engines/reporting /opt/engines/reporting
-RUN pip install /opt/engines/reporting
+RUN pip install "/opt/engines/reporting[pdf]"
 
 # The GenAI subsystem is NOT optional for this image, despite only the AI stage
 # using it: app/tasks/pipeline.py imports app.tasks.ai at module scope, and the API

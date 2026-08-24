@@ -36,3 +36,4 @@ dist/
 *.whl
 generate_apk.py
 test_malware.apk
+ApiDemos-debug.apk

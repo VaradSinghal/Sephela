@@ -56,7 +56,7 @@ services:
       SEPHELA_REDIS_HOST: redis
       SEPHELA_LOG_JSON: "false"
     env_file:
-      - ../../backend/.env.example
+      - ../../.env
     volumes:
       - appdata:/app/data
     ports:
@@ -79,9 +79,8 @@ services:
       SEPHELA_POSTGRES_HOST: postgres
       SEPHELA_REDIS_HOST: redis
       SEPHELA_LOG_JSON: "false"
-      QDRANT_URL: http://qdrant:6333
     env_file:
-      - ../../backend/.env.example
+      - ../../.env
     volumes:
       - appdata:/app/data
     depends_on:
