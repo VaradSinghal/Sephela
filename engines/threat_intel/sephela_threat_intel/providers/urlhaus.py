@@ -32,17 +32,22 @@ class UrlHausProvider(Provider):
 
     @property
     def configured(self) -> bool:
-        # Keyless feed — always available.
-        return True
+        # URLHaus recently started enforcing quotas/auth on some endpoints.
+        # Require an API key to run, skipping it gracefully if absent.
+        return bool(self.api_key)
 
     async def lookup(self, ioc: Ioc, client: httpx.AsyncClient) -> ProviderResult:
+        headers = {"Accept": "application/json"}
+        if self.api_key:
+            headers["Auth-Key"] = self.api_key
+
         if ioc.type is IocType.url:
             endpoint, form = URL_ENDPOINT, {"url": ioc.value}
         else:
             endpoint, form = HOST_ENDPOINT, {"host": ioc.value}
 
         payload = await request_json(
-            client, "POST", endpoint, provider=self.name, data=form
+            client, "POST", endpoint, provider=self.name, headers=headers, data=form
         )
         # URLhaus signals "not found" in the body, not the status code.
         if payload is None or payload.get("query_status") != "ok":
