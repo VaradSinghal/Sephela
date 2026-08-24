@@ -57,6 +57,8 @@ services:
       SEPHELA_LOG_JSON: "false"
     env_file:
       - ../../backend/.env.example
+    volumes:
+      - appdata:/app/data
     ports:
       - "8000:8000"
     depends_on:
@@ -80,6 +82,8 @@ services:
       QDRANT_URL: http://qdrant:6333
     env_file:
       - ../../backend/.env.example
+    volumes:
+      - appdata:/app/data
     depends_on:
       redis:
         condition: service_healthy
@@ -111,6 +115,7 @@ services:
 volumes:
   pgdata:
   qdrantdata:
+  appdata:
   # Kept out of the bind mount so the container's install does not fight a host
   # node_modules built for a different platform.
   frontend_node_modules:

@@ -15,8 +15,13 @@ WORKDIR /app
 
 # System deps kept minimal; add build tooling only in a builder layer if needed.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl \
+    curl unzip default-jre-headless \
     && rm -rf /var/lib/apt/lists/*
+
+RUN curl -L -o jadx.zip https://github.com/skylot/jadx/releases/download/v1.4.7/jadx-1.4.7.zip \
+    && unzip jadx.zip -d /usr/local/jadx \
+    && ln -s /usr/local/jadx/bin/jadx /usr/local/bin/jadx \
+    && rm jadx.zip
 
 # Backend dependencies first — this layer only busts when deps change.
 COPY backend/pyproject.toml ./
@@ -27,7 +32,7 @@ RUN pip install --upgrade pip && pip install .
 # a missing install surfaces as a failed stage with a clear message rather than a
 # crash, which makes it exactly the kind of gap that survives unnoticed.
 COPY engines/static /opt/engines/static
-RUN pip install /opt/engines/static
+RUN pip install "/opt/engines/static[tools]"
 COPY engines/code_intel /opt/engines/code_intel
 RUN pip install /opt/engines/code_intel
 COPY engines/dynamic /opt/engines/dynamic
@@ -42,7 +47,7 @@ RUN pip install /opt/engines/reporting
 # reaches pipeline through app.events.producer. Without `ai` installed, both the API
 # and every worker fail at import with ModuleNotFoundError — not at first AI use.
 COPY ai /opt/ai
-RUN pip install /opt/ai
+RUN pip install "/opt/ai[otel]"
 
 COPY backend/ .
 
