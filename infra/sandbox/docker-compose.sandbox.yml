@@ -47,15 +47,10 @@ services:
       - /tmp:size=2G
       - /root/.android:size=1G
     volumes:
-      # APK input (read-only)
-      - type: bind
-        source: ${SEPHELA_SAMPLES_DIR:-./__samples}
-        target: /samples
-        read_only: true
-      # Artifact output
-      - type: bind
-        source: ${SEPHELA_OUTPUT_DIR:-./__output}
-        target: /output
+      # APK input and Artifact output via shared named volume
+      - type: volume
+        source: appdata
+        target: /app/data
     # Network isolation at Docker level
     networks:
       - sandbox_isolated
@@ -71,3 +66,7 @@ networks:
     ipam:
       config:
         - subnet: 172.28.0.0/24
+
+volumes:
+  appdata:
+    external: true

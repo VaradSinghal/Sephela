@@ -14,10 +14,15 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 
 # System deps kept minimal; add build tooling only in a builder layer if needed.
+# CACHE BUST 3
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl unzip default-jre-headless \
     libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz0b libfontconfig1 \
     && rm -rf /var/lib/apt/lists/*
+
+# Install Docker CLI & Compose from official image for DooD
+COPY --from=docker:cli /usr/local/bin/docker /usr/local/bin/
+COPY --from=docker:cli /usr/local/libexec/docker/cli-plugins/docker-compose /usr/local/libexec/docker/cli-plugins/
 
 RUN curl -L -o jadx.zip https://github.com/skylot/jadx/releases/download/v1.4.7/jadx-1.4.7.zip \
     && unzip jadx.zip -d /usr/local/jadx \
