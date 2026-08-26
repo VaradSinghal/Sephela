@@ -58,12 +58,14 @@ class EnrichmentCacheRepository:
         job_id: uuid.UUID | None = None,
         ttl_factor: float = 1.0,
     ) -> None:
+        import asyncio
         self.session = session
         self.job_id = job_id
         # The engine decides a sensible TTL per indicator class; the deployment
         # decides how much it trusts that against its own quota. Applied here
         # rather than in the engine so the engine stays free of config.
         self.ttl_factor = max(0.0, ttl_factor)
+        self._lock = asyncio.Lock()
 
     async def get(self, ioc: Ioc, provider: str) -> CachedVerdict | None:
         """Return the freshest non-expired verdict for this indicator/provider.
@@ -72,37 +74,38 @@ class EnrichmentCacheRepository:
         immortal: a missing TTL means the row predates a TTL policy, and silently
         serving it forever would pin a verdict that may be years stale.
         """
-        from sephela_threat_intel.cache import CachedVerdict
+        async with self._lock:
+            from sephela_threat_intel.cache import CachedVerdict
 
-        now = datetime.now(UTC)
-        stmt = (
-            select(Enrichment)
-            .where(
-                Enrichment.ioc_type == ioc.type.value,
-                Enrichment.ioc_value == ioc.value[:MAX_IOC_VALUE_CHARS],
-                Enrichment.provider == provider,
-                Enrichment.expires_at.is_not(None),
-                Enrichment.expires_at > now,
+            now = datetime.now(UTC)
+            stmt = (
+                select(Enrichment)
+                .where(
+                    Enrichment.ioc_type == ioc.type.value,
+                    Enrichment.ioc_value == ioc.value[:MAX_IOC_VALUE_CHARS],
+                    Enrichment.provider == provider,
+                    Enrichment.expires_at.is_not(None),
+                    Enrichment.expires_at > now,
+                )
+                .order_by(Enrichment.fetched_at.desc())
+                .limit(1)
             )
-            .order_by(Enrichment.fetched_at.desc())
-            .limit(1)
-        )
-        row = (await self.session.execute(stmt)).scalar_one_or_none()
-        if row is None or row.verdict is None:
-            return None
+            row = (await self.session.execute(stmt)).scalar_one_or_none()
+            if row is None or row.verdict is None:
+                return None
 
-        from sephela_threat_intel.base import Verdict
+            from sephela_threat_intel.base import Verdict
 
-        try:
-            verdict = Verdict(row.verdict)
-        except ValueError:
-            # A verdict vocabulary change should invalidate the entry, not crash
-            # the stage.
-            logger.warning("enrichment_cache_unknown_verdict", verdict=row.verdict)
-            return None
+            try:
+                verdict = Verdict(row.verdict)
+            except ValueError:
+                # A verdict vocabulary change should invalidate the entry, not crash
+                # the stage.
+                logger.warning("enrichment_cache_unknown_verdict", verdict=row.verdict)
+                return None
 
-        raw: dict[str, Any] = row.raw if isinstance(row.raw, dict) else {}
-        return CachedVerdict(verdict=verdict, raw=raw)
+            raw: dict[str, Any] = row.raw if isinstance(row.raw, dict) else {}
+            return CachedVerdict(verdict=verdict, raw=raw)
 
     async def put(self, ioc: Ioc, provider: str, entry: CachedVerdict, *, ttl: int) -> None:
         """Persist a freshly fetched verdict, tagged to the job that fetched it.
@@ -112,22 +115,23 @@ class EnrichmentCacheRepository:
         ``get`` reads the newest row, so an insert supersedes older entries
         without destroying the history that a completed job's report depends on.
         """
-        now = datetime.now(UTC)
-        effective_ttl = int(max(0, ttl) * self.ttl_factor)
-        self.session.add(
-            Enrichment(
-                id=uuid.uuid4(),
-                job_id=self.job_id,
-                ioc_type=ioc.type.value,
-                ioc_value=ioc.value[:MAX_IOC_VALUE_CHARS],
-                provider=provider[:32],
-                verdict=entry.verdict.value,
-                raw=entry.raw,
-                fetched_at=now,
-                expires_at=now + timedelta(seconds=effective_ttl),
+        async with self._lock:
+            now = datetime.now(UTC)
+            effective_ttl = int(max(0, ttl) * self.ttl_factor)
+            self.session.add(
+                Enrichment(
+                    id=uuid.uuid4(),
+                    job_id=self.job_id,
+                    ioc_type=ioc.type.value,
+                    ioc_value=ioc.value[:MAX_IOC_VALUE_CHARS],
+                    provider=provider[:32],
+                    verdict=entry.verdict.value,
+                    raw=entry.raw,
+                    fetched_at=now,
+                    expires_at=now + timedelta(seconds=effective_ttl),
+                )
             )
-        )
-        await self.session.flush()
+            await self.session.flush()
 
 
 class EnrichmentRepository:

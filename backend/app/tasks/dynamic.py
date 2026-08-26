@@ -145,15 +145,34 @@ async def _execute(
 
     await stage.begin()
 
+    # Progress interpolator: the dynamic sandbox takes ~10-12 minutes. 
+    # Start at 35% (end of code_intel) and slowly increment to 80% to keep the UI active.
+    async def _progress_loop() -> None:
+        current_progress = 35
+        try:
+            while current_progress < 80:
+                await asyncio.sleep(15)  # Update every 15s
+                current_progress += 1
+                await stage.set_progress(current_progress)
+        except asyncio.CancelledError:
+            pass
+
+    progress_task = asyncio.create_task(_progress_loop())
+
     try:
         await runner.run(apk_path, artifacts_dir, job_id=job_id)
     except SandboxDisabledError as exc:
+        progress_task.cancel()
         return await stage.skip(str(exc))
     except SandboxError as exc:
+        progress_task.cancel()
         return await stage.fail(exc)
     except Exception as exc:  # noqa: BLE001 — a stuck sandbox must not kill the job
+        progress_task.cancel()
         logger.exception("dynamic_sandbox_unexpected", job_id=job_id)
         return await stage.fail(exc)
+
+    progress_task.cancel()
 
     # Parsing is pure data handling, but artifacts are untrusted input.
     try:
