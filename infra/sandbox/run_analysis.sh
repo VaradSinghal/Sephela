@@ -81,8 +81,19 @@ trap cleanup EXIT
 
 log "Step 1: Computing APK metadata..."
 APK_SHA256=$(sha256sum "$APK_PATH" | awk '{print $1}')
-# Extract package name from APK using aapt2
-APK_PACKAGE=$(aapt2 dump badging "$APK_PATH" 2>/dev/null | grep "^package:" | sed "s/.*name='\([^']*\)'.*/\1/" || echo "unknown")
+# Extract package name from APK using aapt2 (from SDK build-tools)
+AAPT2=$(find "${ANDROID_HOME}/build-tools" -name aapt2 -type f 2>/dev/null | head -1)
+if [[ -n "$AAPT2" ]]; then
+    APK_PACKAGE=$("$AAPT2" dump badging "$APK_PATH" 2>/dev/null | sed -n "s/^package: name='\([^']*\)'.*/\1/p" | head -1)
+fi
+# Fallback: use aapt if aapt2 didn't work
+if [[ -z "$APK_PACKAGE" ]]; then
+    AAPT=$(find "${ANDROID_HOME}/build-tools" -name aapt -type f 2>/dev/null | head -1)
+    if [[ -n "$AAPT" ]]; then
+        APK_PACKAGE=$("$AAPT" dump badging "$APK_PATH" 2>/dev/null | sed -n "s/^package: name='\([^']*\)'.*/\1/p" | head -1)
+    fi
+fi
+APK_PACKAGE="${APK_PACKAGE:-unknown}"
 log "  SHA256: ${APK_SHA256}"
 log "  Package: ${APK_PACKAGE}"
 
@@ -111,6 +122,17 @@ log "  Egress: DEFAULT DENY (DNS to localhost only)"
 log "Step 3: Booting Android emulator (API ${API_LEVEL})..."
 AVD_NAME="sephela_sandbox_api${API_LEVEL}"
 
+# Copy AVD from build-time template into the runtime volume.
+# /root/.android is a Docker volume (for statvfs compatibility with the
+# emulator's disk space check), so the build-time AVD isn't visible.
+if [[ -d /opt/avd-template ]] && [[ ! -d /root/.android/avd ]]; then
+    log "  Copying AVD template to runtime volume..."
+    cp -a /opt/avd-template/* /root/.android/
+fi
+
+# Clean up any stale lock files from previous crashed runs
+find /root/.android/avd/ -name "*.lock" -delete 2>/dev/null || true
+
 # Create AVD if it doesn't exist
 if ! avdmanager list avd 2>/dev/null | grep -q "$AVD_NAME"; then
     log "  Creating AVD: ${AVD_NAME}..."
@@ -122,20 +144,35 @@ if ! avdmanager list avd 2>/dev/null | grep -q "$AVD_NAME"; then
 fi
 
 # Boot emulator headless with snapshot
+# ANDROID_EMULATOR_SKIP_DISK_CHECK bypasses the false-positive disk space check on tmpfs
+export ANDROID_EMULATOR_SKIP_DISK_CHECK=1
 emulator -avd "$AVD_NAME" \
     -no-window -no-audio -no-boot-anim \
     -gpu swiftshader_indirect \
-    -read-only \
-    -no-snapshot-save \
+    -no-snapshot \
     -wipe-data \
+    -skip-adb-auth \
+    -no-metrics \
     &
 EMULATOR_PID=$!
 
-# Wait for boot
+# Wait for boot (with timeout)
 log "  Waiting for emulator to boot..."
-adb wait-for-device
-adb shell 'while [[ "$(getprop sys.boot_completed)" != "1" ]]; do sleep 1; done'
-log "  Emulator booted."
+if ! timeout 120 adb wait-for-device; then
+    log "  ERROR: adb wait-for-device timed out because emulator crashed."
+    exit 1
+fi
+BOOT_TIMEOUT=120
+BOOT_ELAPSED=0
+while [[ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" != "1" ]]; do
+    sleep 2
+    BOOT_ELAPSED=$((BOOT_ELAPSED + 2))
+    if [[ $BOOT_ELAPSED -ge $BOOT_TIMEOUT ]]; then
+        log "  ERROR: Emulator failed to boot within ${BOOT_TIMEOUT}s"
+        exit 1
+    fi
+done
+log "  Emulator booted in ~${BOOT_ELAPSED}s."
 
 # Record start time
 START_TIME=$(date +%s%3N)
