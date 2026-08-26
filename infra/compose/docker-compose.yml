@@ -81,9 +81,11 @@ services:
       SEPHELA_LOG_JSON: "false"
     env_file:
       - ../../.env
+    user: "root"
     volumes:
       - appdata:/app/data
       - /var/run/docker.sock:/var/run/docker.sock
+      - ../../infra:/infra
     depends_on:
       redis:
         condition: service_healthy

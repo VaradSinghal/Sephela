@@ -119,6 +119,7 @@ class SubprocessSandboxRunner(SandboxRunner):
                 str(self.compose_file),
                 "run",
                 "--rm",
+                "--build",
                 "sandbox",
                 "/opt/sephela/run_analysis.sh",
                 str(apk_path),
