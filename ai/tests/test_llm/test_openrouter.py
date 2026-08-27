@@ -30,7 +30,7 @@ from ai.llm.provider import ChatCompletionRequest, ChatMessage, ProviderName
 
 def _request(**overrides: Any) -> ChatCompletionRequest:
     base: dict[str, Any] = {
-        "model": "anthropic/claude-opus-5",
+        "model": "anthropic/nvidia/nemotron-3-super-120b-a12b:free",
         "messages": [
             ChatMessage(role="system", content="You are an analyst."),
             ChatMessage(role="user", content="Analyse this."),
@@ -50,28 +50,28 @@ class TestModelRouting:
     """``supports_model`` is what decides which provider a model name reaches."""
 
     def test_openrouter_claims_provider_prefixed_slugs(self) -> None:
-        assert OpenRouterAdapter(api_key="k").supports_model("anthropic/claude-opus-5") is True
+        assert OpenRouterAdapter(api_key="k").supports_model("anthropic/nvidia/nemotron-3-super-120b-a12b:free") is True
 
     def test_openrouter_does_not_claim_a_bare_anthropic_name(self) -> None:
         # This is the whole reason AgentModelConfig has to know which providers are
         # registered: OpenRouter needs the prefix and rejects the bare name.
-        assert OpenRouterAdapter(api_key="k").supports_model("claude-opus-5") is False
+        assert OpenRouterAdapter(api_key="k").supports_model("nvidia/nemotron-3-super-120b-a12b:free") is False
 
     def test_anthropic_claims_the_claude_family(self) -> None:
         adapter = AnthropicAdapter(api_key="k")
 
-        assert adapter.supports_model("claude-opus-5") is True
+        assert adapter.supports_model("nvidia/nemotron-3-super-120b-a12b:free") is True
         assert adapter.supports_model("claude-haiku-4-5") is True
 
     def test_anthropic_does_not_claim_the_prefixed_form(self) -> None:
-        assert AnthropicAdapter(api_key="k").supports_model("anthropic/claude-opus-5") is False
+        assert AnthropicAdapter(api_key="k").supports_model("anthropic/nvidia/nemotron-3-super-120b-a12b:free") is False
 
     def test_openai_claims_its_own_families_only(self) -> None:
         adapter = OpenAIAdapter(api_key="k", provider=ProviderName.OPENAI)
 
         assert adapter.supports_model("gpt-4o") is True
         assert adapter.supports_model("o1-preview") is True
-        assert adapter.supports_model("claude-opus-5") is False
+        assert adapter.supports_model("nvidia/nemotron-3-super-120b-a12b:free") is False
 
     def test_gemini_claims_gemini_models(self) -> None:
         adapter = OpenAIAdapter(api_key="k", base_url=_GEMINI_BASE, provider=ProviderName.GEMINI)
@@ -113,11 +113,11 @@ class TestOpenRouterRequest:
         seen = install_transport(_ok(openai_style_response()))
 
         await OpenRouterAdapter(api_key="k").complete(
-            _request(model="anthropic/claude-opus-5", temperature=0.7, max_tokens=1000)
+            _request(model="anthropic/nvidia/nemotron-3-super-120b-a12b:free", temperature=0.7, max_tokens=1000)
         )
 
         payload = json.loads(seen[0].content)
-        assert payload["model"] == "anthropic/claude-opus-5"
+        assert payload["model"] == "anthropic/nvidia/nemotron-3-super-120b-a12b:free"
         assert payload["temperature"] == 0.7
         assert payload["max_tokens"] == 1000
 
@@ -234,7 +234,7 @@ class TestAnthropicAdapter:
     ) -> None:
         seen = install_transport(_ok(anthropic_style_response()))
 
-        await AnthropicAdapter(api_key="k").complete(_request(model="claude-opus-5"))
+        await AnthropicAdapter(api_key="k").complete(_request(model="nvidia/nemotron-3-super-120b-a12b:free"))
 
         request = seen[0]
         assert str(request.url) == f"{_ANTHROPIC_BASE}/v1/messages"
@@ -248,7 +248,7 @@ class TestAnthropicAdapter:
         # role inside `messages`.
         seen = install_transport(_ok(anthropic_style_response()))
 
-        await AnthropicAdapter(api_key="k").complete(_request(model="claude-opus-5"))
+        await AnthropicAdapter(api_key="k").complete(_request(model="nvidia/nemotron-3-super-120b-a12b:free"))
 
         payload = json.loads(seen[0].content)
         assert payload["system"] == "You are an analyst."
@@ -261,7 +261,7 @@ class TestAnthropicAdapter:
         seen = install_transport(_ok(anthropic_style_response()))
 
         await AnthropicAdapter(api_key="k").complete(
-            _request(model="claude-opus-5", messages=[ChatMessage(role="system", content="S")])
+            _request(model="nvidia/nemotron-3-super-120b-a12b:free", messages=[ChatMessage(role="system", content="S")])
         )
 
         payload = json.loads(seen[0].content)
@@ -277,7 +277,7 @@ class TestAnthropicAdapter:
         ]
         install_transport(_ok(body))
 
-        response = await AnthropicAdapter(api_key="k").complete(_request(model="claude-opus-5"))
+        response = await AnthropicAdapter(api_key="k").complete(_request(model="nvidia/nemotron-3-super-120b-a12b:free"))
 
         assert response.content == '{"a": 1}'
 
@@ -288,7 +288,7 @@ class TestAnthropicAdapter:
         body["content"].insert(0, {"type": "thinking", "thinking": "hmm"})
         install_transport(_ok(body))
 
-        response = await AnthropicAdapter(api_key="k").complete(_request(model="claude-opus-5"))
+        response = await AnthropicAdapter(api_key="k").complete(_request(model="nvidia/nemotron-3-super-120b-a12b:free"))
 
         assert response.content == '{"ok": true}'
 
@@ -298,7 +298,7 @@ class TestAnthropicAdapter:
         # input_tokens/output_tokens here, prompt/completion everywhere else.
         install_transport(_ok(anthropic_style_response(input_tokens=900, output_tokens=120)))
 
-        response = await AnthropicAdapter(api_key="k").complete(_request(model="claude-opus-5"))
+        response = await AnthropicAdapter(api_key="k").complete(_request(model="nvidia/nemotron-3-super-120b-a12b:free"))
 
         assert response.usage.prompt_tokens == 900
         assert response.usage.completion_tokens == 120

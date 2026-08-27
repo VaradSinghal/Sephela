@@ -102,7 +102,7 @@ class PermissionAgent(BaseAgent[PermissionAnalysis]):
     def __init__(self, llm_client: Any = None, knowledge: Any = None):
         config = AgentConfig(
             name="permission_agent",
-            model="claude-opus-5",
+            model="nvidia/nemotron-3-super-120b-a12b:free",
             temperature=0.1,
             max_tokens=4096,
             output_schema=PermissionAnalysis,

@@ -54,7 +54,7 @@ class ReportAgent(BaseAgent[ReportGenerationResult]):
     def __init__(self, llm_client: Any = None, knowledge: Any = None):
         config = AgentConfig(
             name="report_agent",
-            model="claude-opus-5",
+            model="nvidia/nemotron-3-super-120b-a12b:free",
             temperature=0.2,
             max_tokens=8192,
             output_schema=ReportGenerationResult,

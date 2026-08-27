@@ -244,7 +244,7 @@ class OpenRouterAdapter(BaseLLMProvider):
     OpenRouter unified gateway — supports 300+ models from all major providers.
 
     Model IDs use the ``provider/model`` slug format, e.g.:
-      ``anthropic/claude-opus-5``
+      ``anthropic/nvidia/nemotron-3-super-120b-a12b:free``
       ``openai/gpt-4o``
       ``google/gemini-pro-1.5``
       ``meta-llama/llama-3.1-70b-instruct``

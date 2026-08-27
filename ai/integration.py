@@ -60,12 +60,12 @@ _LOG = logging.getLogger("sephela.integration")
 
 #: The model every agent uses when nothing more specific is configured, per
 #: provider. Which slug is correct is not a preference — the *same* model is
-#: ``claude-opus-5`` to Anthropic's API and ``anthropic/claude-opus-5`` to
+#: ``nvidia/nemotron-3-super-120b-a12b:free`` to Anthropic's API and ``anthropic/nvidia/nemotron-3-super-120b-a12b:free`` to
 #: OpenRouter's, and each rejects the other's spelling. So the default cannot be a
 #: single constant; it has to be chosen from what is actually registered.
 _PROVIDER_DEFAULT_MODEL: dict[ProviderName, str] = {
-    ProviderName.ANTHROPIC: "claude-opus-5",
-    ProviderName.OPENROUTER: "anthropic/claude-opus-5",
+    ProviderName.ANTHROPIC: "nvidia/nemotron-3-super-120b-a12b:free",
+    ProviderName.OPENROUTER: "nvidia/nemotron-3-super-120b-a12b:free",
     ProviderName.OPENAI: "gpt-4o",
     ProviderName.GEMINI: "gemini-1.5-pro",
     ProviderName.LOCAL: "local/default",
@@ -75,8 +75,8 @@ _PROVIDER_DEFAULT_MODEL: dict[ProviderName, str] = {
 #: the prompts and schemas in ai/prompts/ were written and tuned against Claude;
 #: OpenRouter second because it can serve the same model, just more indirectly.
 _PROVIDER_PREFERENCE: tuple[ProviderName, ...] = (
-    ProviderName.ANTHROPIC,
     ProviderName.OPENROUTER,
+    ProviderName.ANTHROPIC,
     ProviderName.OPENAI,
     ProviderName.GEMINI,
     ProviderName.LOCAL,
@@ -110,29 +110,29 @@ class AgentModelConfig:
     """
 
     manifest_agent: str = field(
-        default_factory=lambda: os.getenv("MANIFEST_MODEL", "claude-opus-5")
+        default_factory=lambda: os.getenv("MANIFEST_MODEL", "nvidia/nemotron-3-super-120b-a12b:free")
     )
     permission_agent: str = field(
-        default_factory=lambda: os.getenv("PERMISSION_MODEL", "claude-opus-5")
+        default_factory=lambda: os.getenv("PERMISSION_MODEL", "nvidia/nemotron-3-super-120b-a12b:free")
     )
-    code_agent: str = field(default_factory=lambda: os.getenv("CODE_MODEL", "claude-opus-5"))
-    api_agent: str = field(default_factory=lambda: os.getenv("API_MODEL", "claude-opus-5"))
-    network_agent: str = field(default_factory=lambda: os.getenv("NETWORK_MODEL", "claude-opus-5"))
+    code_agent: str = field(default_factory=lambda: os.getenv("CODE_MODEL", "nvidia/nemotron-3-super-120b-a12b:free"))
+    api_agent: str = field(default_factory=lambda: os.getenv("API_MODEL", "nvidia/nemotron-3-super-120b-a12b:free"))
+    network_agent: str = field(default_factory=lambda: os.getenv("NETWORK_MODEL", "nvidia/nemotron-3-super-120b-a12b:free"))
     threat_intel_agent: str = field(
-        default_factory=lambda: os.getenv("THREAT_INTEL_MODEL", "claude-opus-5")
+        default_factory=lambda: os.getenv("THREAT_INTEL_MODEL", "nvidia/nemotron-3-super-120b-a12b:free")
     )
-    risk_agent: str = field(default_factory=lambda: os.getenv("RISK_MODEL", "claude-opus-5"))
-    report_agent: str = field(default_factory=lambda: os.getenv("REPORT_MODEL", "claude-opus-5"))
+    risk_agent: str = field(default_factory=lambda: os.getenv("RISK_MODEL", "nvidia/nemotron-3-super-120b-a12b:free"))
+    report_agent: str = field(default_factory=lambda: os.getenv("REPORT_MODEL", "nvidia/nemotron-3-super-120b-a12b:free"))
 
     @classmethod
     def for_providers(cls, providers: Iterable[ProviderName]) -> AgentModelConfig:
         """Defaults the registered providers can actually serve.
 
         Without this, an OpenRouter-only deployment fails on every agent call. The
-        bare ``claude-opus-5`` default finds no explicit supporter, so
+        bare ``nvidia/nemotron-3-super-120b-a12b:free`` default finds no explicit supporter, so
         ``ModelRouter.resolve`` falls through to its OpenRouter-as-universal-fallback
         branch and forwards the Anthropic spelling to an API that requires
-        ``anthropic/claude-opus-5`` — a 400 on every request that reads like a wiring
+        ``anthropic/nvidia/nemotron-3-super-120b-a12b:free`` — a 400 on every request that reads like a wiring
         bug rather than a naming one.
 
         Per-agent ``*_MODEL`` environment variables still win, so a deliberate
@@ -141,7 +141,7 @@ class AgentModelConfig:
         registered = frozenset(providers)
         fallback = next(
             (_PROVIDER_DEFAULT_MODEL[name] for name in _PROVIDER_PREFERENCE if name in registered),
-            _PROVIDER_DEFAULT_MODEL[ProviderName.ANTHROPIC],
+            _PROVIDER_DEFAULT_MODEL[ProviderName.OPENROUTER],
         )
         return cls(
             **{
@@ -174,8 +174,8 @@ class AgentModelConfig:
             api_agent="claude-haiku-4-5",
             network_agent="claude-haiku-4-5",
             threat_intel_agent="claude-haiku-4-5",
-            risk_agent="claude-opus-5",
-            report_agent="claude-opus-5",
+            risk_agent="nvidia/nemotron-3-super-120b-a12b:free",
+            report_agent="nvidia/nemotron-3-super-120b-a12b:free",
         )
 
 
@@ -236,9 +236,9 @@ class SephelaAnalysisPipeline:
         self,
         gateway: LLMGateway,
         model_config: AgentModelConfig | None = None,
-        analysis_timeout_s: float = 300.0,
-        risk_timeout_s: float = 180.0,
-        report_timeout_s: float = 240.0,
+        analysis_timeout_s: float = 600.0,
+        risk_timeout_s: float = 600.0,
+        report_timeout_s: float = 600.0,
         max_retries: int = 2,
         checkpointer: Any = None,
         knowledge: Any = None,
@@ -484,7 +484,7 @@ INTEGRATION_WIRING = """
 ║    │       adds prior agent context (if any)                            ║
 ║    │                                                                     ║
 ║    ├── LLMGateway.generate(                                             ║
-║    │       model_name="claude-opus-5",                     ║
+║    │       model_name="nvidia/nemotron-3-super-120b-a12b:free",                     ║
 ║    │       system_prompt=system,                                        ║
 ║    │       user_prompt=user,                                            ║
 ║    │       response_schema=ManifestAnalysisResult,                      ║

@@ -223,7 +223,7 @@ class APIAgent(BaseAgent[APIAnalysis]):
     def __init__(self, llm_client: Any = None, knowledge: Any = None):
         config = AgentConfig(
             name="api_agent",
-            model="claude-opus-5",
+            model="nvidia/nemotron-3-super-120b-a12b:free",
             temperature=0.1,
             max_tokens=8192,
             output_schema=APIAnalysis,

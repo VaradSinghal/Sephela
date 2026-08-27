@@ -93,7 +93,7 @@ class AgentConfig(BaseModel):
     """Agent configuration."""
 
     name: str
-    model: str = "claude-opus-5"
+    model: str = "nvidia/nemotron-3-super-120b-a12b:free"
     temperature: float = 0.1
     max_tokens: int = 8192
     timeout_seconds: int = 120

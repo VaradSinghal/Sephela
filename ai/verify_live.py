@@ -18,7 +18,7 @@ Checks, in the order they fail:
 
 1. A provider is registered at all.
 2. The selected model slug is one that provider accepts — the mistake this is most likely
-   to catch, since a bare ``claude-opus-5`` is correct for Anthropic and a 400 for
+   to catch, since a bare ``nvidia/nemotron-3-super-120b-a12b:free`` is correct for Anthropic and a 400 for
    OpenRouter.
 3. The model answers, and the answer parses against the agent's schema.
 4. Token usage comes back from the provider rather than being estimated.
@@ -103,7 +103,7 @@ async def _run(model_override: str | None) -> int:
         print(
             f"\nWARN  {provider.provider_name.value} does not claim {model!r} — it was\n"
             f"      reached by fallback and will probably reject the request. Try the\n"
-            f"      provider-prefixed form, e.g. anthropic/claude-opus-5.\n"
+            f"      provider-prefixed form, e.g. anthropic/nvidia/nemotron-3-super-120b-a12b:free.\n"
         )
 
     # 3-5. One real call, through the real agent.

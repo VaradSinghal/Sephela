@@ -108,9 +108,9 @@ class WorkflowConfig:
 
     llm_client: Any = None
     checkpointer: BaseCheckpointSaver | None = None
-    analysis_timeout_s: float = 180.0
-    risk_timeout_s: float = 120.0
-    report_timeout_s: float = 120.0
+    analysis_timeout_s: float = 600.0
+    risk_timeout_s: float = 600.0
+    report_timeout_s: float = 600.0
     max_retries: int = 3
     graph_debug: bool = False
     agent_overrides: dict[str, Any] = field(default_factory=dict)

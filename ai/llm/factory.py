@@ -8,7 +8,7 @@ The LLMGateway is the single entry point for all agent LLM calls:
     gateway = LLMGateway(providers=[...])     # explicit
 
     result = await gateway.generate(
-        model_name="claude-opus-5",
+        model_name="nvidia/nemotron-3-super-120b-a12b:free",
         system_prompt="You are ...",
         user_prompt="Analyse this ...",
         response_schema=MyPydanticModel,      # optional
@@ -88,7 +88,7 @@ class ModelRouter:
     def providers(self) -> frozenset[ProviderName]:
         """Which providers are registered. Callers need this to pick model IDs.
 
-        A bare ``claude-opus-5`` and ``anthropic/claude-opus-5`` name the same model
+        A bare ``nvidia/nemotron-3-super-120b-a12b:free`` and ``anthropic/nvidia/nemotron-3-super-120b-a12b:free`` name the same model
         but only one of them is valid per provider, so the choice of slug cannot be
         made without knowing what is registered.
         """
@@ -296,7 +296,7 @@ class LLMGateway:
         Generate a completion.
 
         Args:
-            model_name:      LLM model identifier (e.g. "claude-opus-5").
+            model_name:      LLM model identifier (e.g. "nvidia/nemotron-3-super-120b-a12b:free").
             system_prompt:   System/context instructions.
             user_prompt:     User turn (evidence + analysis request).
             response_schema: Optional Pydantic model class.  When provided, the

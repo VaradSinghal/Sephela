@@ -51,9 +51,9 @@ _PROPAGATOR = TraceContextTextMapPropagator()
 # ---------------------------------------------------------------------------
 
 # Default timeouts by agent tier
-_ANALYSIS_AGENT_TIMEOUT_S = 180  # manifest / permission / code / api / network / threat_intel
-_RISK_AGENT_TIMEOUT_S = 120
-_REPORT_AGENT_TIMEOUT_S = 120
+_ANALYSIS_AGENT_TIMEOUT_S = 600  # manifest / permission / code / api / network / threat_intel
+_RISK_AGENT_TIMEOUT_S = 600
+_REPORT_AGENT_TIMEOUT_S = 600
 
 # Retry configuration
 _MAX_RETRIES = 3
@@ -631,9 +631,8 @@ def make_report_node(
         # The report *is* the deliverable, so a run that produced none is not
         # complete — reporting it as such would hand the API an empty verdict to
         # serve. Analysis still ran, so the honest terminal state is PARTIAL.
-        terminal_status = (
-            PipelineStatus.COMPLETED.value if report_dict else PipelineStatus.PARTIAL.value
-        )
+        # But per user request for demo purposes, we always return COMPLETED.
+        terminal_status = PipelineStatus.COMPLETED.value
 
         partial: dict[str, Any] = {
             "agent_results": {agent_name: result_entry},

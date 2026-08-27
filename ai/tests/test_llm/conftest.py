@@ -52,7 +52,7 @@ def openai_style_response() -> Callable[..., dict[str, Any]]:
 
     def _build(
         content: str = '{"ok": true}',
-        model: str = "anthropic/claude-opus-5",
+        model: str = "anthropic/nvidia/nemotron-3-super-120b-a12b:free",
         prompt_tokens: int = 100,
         completion_tokens: int = 25,
         finish_reason: str = "stop",
@@ -83,7 +83,7 @@ def anthropic_style_response() -> Callable[..., dict[str, Any]]:
 
     def _build(
         content: str = '{"ok": true}',
-        model: str = "claude-opus-5",
+        model: str = "nvidia/nemotron-3-super-120b-a12b:free",
         input_tokens: int = 100,
         output_tokens: int = 25,
         stop_reason: str = "end_turn",

@@ -255,14 +255,14 @@ class TestQueueDepth:
 class TestLLMMetrics:
     def test_a_call_is_counted_by_model_agent_and_outcome(self, metrics) -> None:
         pm.record_llm_call(
-            model="anthropic/claude-opus-5", agent="manifest_agent", outcome="completed"
+            model="anthropic/nvidia/nemotron-3-super-120b-a12b:free", agent="manifest_agent", outcome="completed"
         )
 
         assert (
             value_of(
                 metrics,
                 "sephela_llm_calls_total",
-                model="anthropic/claude-opus-5",
+                model="anthropic/nvidia/nemotron-3-super-120b-a12b:free",
                 agent="manifest_agent",
                 outcome="completed",
             )
@@ -273,14 +273,14 @@ class TestLLMMetrics:
         # This is what turns cost per analysis from an invoice line into a metric, and
         # per-agent is the granularity that says which prompt to shorten.
         pm.record_llm_call(
-            model="anthropic/claude-opus-5", agent="code_agent", outcome="completed", tokens=4096
+            model="anthropic/nvidia/nemotron-3-super-120b-a12b:free", agent="code_agent", outcome="completed", tokens=4096
         )
 
         assert (
             value_of(
                 metrics,
                 "sephela_llm_tokens_total",
-                model="anthropic/claude-opus-5",
+                model="anthropic/nvidia/nemotron-3-super-120b-a12b:free",
                 agent="code_agent",
             )
             == 4096

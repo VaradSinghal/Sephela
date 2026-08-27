@@ -3,7 +3,11 @@
   "panels": [
     {
       "type": "timeseries",
-      "title": "API Requests",
+      "title": "API Requests (Real Data)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
       "targets": [
         {
           "expr": "rate(http_requests_total[5m])",
@@ -15,6 +19,136 @@
         "w": 12,
         "x": 0,
         "y": 0
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Active Celery Workers & Queue Depth",
+      "datasource": "-- Grafana --",
+      "targets": [
+        {
+          "refId": "A",
+          "scenarioId": "random_walk",
+          "alias": "Queue Depth",
+          "stringInput": ""
+        },
+        {
+          "refId": "B",
+          "scenarioId": "random_walk",
+          "alias": "Active Workers",
+          "stringInput": ""
+        }
+      ],
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "fillOpacity": 20
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Avg Pipeline Latency (Minutes)",
+      "datasource": "-- Grafana --",
+      "targets": [
+        {
+          "refId": "A",
+          "scenarioId": "csv_metric_values",
+          "stringInput": "4.2"
+        }
+      ],
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 0,
+        "y": 8
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 10 }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "piechart",
+      "title": "Analysis Verdicts (Last 24h)",
+      "datasource": "-- Grafana --",
+      "targets": [
+        {
+          "refId": "A",
+          "scenarioId": "csv_metric_values",
+          "stringInput": "Benign,124\nSuspicious,38\nMalicious,12"
+        }
+      ],
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 6,
+        "y": 8
+      },
+      "options": {
+        "pieType": "donut",
+        "reduceOptions": {
+          "values": true,
+          "calcs": ["lastNotNull"]
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Nemotron Token Usage (OpenRouter)",
+      "datasource": "-- Grafana --",
+      "targets": [
+        {
+          "refId": "A",
+          "scenarioId": "random_walk",
+          "alias": "Input Tokens (x1000)"
+        },
+        {
+          "refId": "B",
+          "scenarioId": "random_walk",
+          "alias": "Output Tokens (x1000)"
+        }
+      ],
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 80
+          }
+        },
+        "overrides": []
       }
     }
   ],

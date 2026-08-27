@@ -14,7 +14,7 @@ class RiskFactor(BaseModel):
     factor_id: str
     name: str
     category: str = Field(
-        ..., pattern="^(static|dynamic|code|network|threat_intel|permissions|manifest)$"
+        ..., pattern="^(static|dynamic|code|network|threat_intel|permissions|manifest|api)$"
     )
     weight: float = Field(..., ge=0.0, le=1.0)
     raw_score: float = Field(..., ge=0.0, le=100.0)

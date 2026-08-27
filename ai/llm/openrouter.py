@@ -123,7 +123,7 @@ class OpenRouterModelRegistry:
 
     RECOMMENDED_MODELS = {
         "analysis": [
-            "anthropic/claude-opus-5",
+            "anthropic/nvidia/nemotron-3-super-120b-a12b:free",
             "anthropic/claude-sonnet-5",
             "anthropic/claude-haiku-4.5",
             "openai/gpt-4o",
@@ -140,7 +140,7 @@ class OpenRouterModelRegistry:
             "google/gemma-2-9b-it",
         ],
         "specialized_code": [
-            "anthropic/claude-opus-5",
+            "anthropic/nvidia/nemotron-3-super-120b-a12b:free",
             "openai/gpt-4o",
             "deepseek/deepseek-coder",
         ],

@@ -214,7 +214,7 @@ The LLM abstraction layer in `ai/llm/` provides a provider-agnostic, unified que
 ### Core Architecture Components
 - **`BaseLLMProvider`**: The base interface class outlining the connection requirements for all concrete adapters.
 - **`LLMGateway`**: The primary entrypoint. Handles model routing, request retries, structured JSON extraction, and self-correction.
-- **`ModelRouter`**: Maps model identifiers (e.g. `gpt-4o`, `anthropic/claude-opus-5`) to the registered provider adapter.
+- **`ModelRouter`**: Maps model identifiers (e.g. `gpt-4o`, `anthropic/nvidia/nemotron-3-super-120b-a12b:free`) to the registered provider adapter.
 - **`LLMFactory`**: Manages environment-driven registry initialization:
   - `OPENROUTER_API_KEY` → Initializes `OpenRouterAdapter`
   - `ANTHROPIC_API_KEY` → Initializes `AnthropicAdapter`
@@ -324,7 +324,7 @@ The GenAI subsystem configuration is managed via these variables in `.env`:
 
 ### Agent Model Mappings
 Model assignments for each analysis agent:
-- `MANIFEST_MODEL` (e.g. `anthropic/claude-opus-5`)
+- `MANIFEST_MODEL` (e.g. `anthropic/nvidia/nemotron-3-super-120b-a12b:free`)
 - `PERMISSION_MODEL`
 - `CODE_MODEL`
 - `API_MODEL`

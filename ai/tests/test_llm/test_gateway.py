@@ -2,7 +2,7 @@
 
 The routing tests are the important ones. Resolution has four steps and the last is a
 fallback that hands an unrecognised model to OpenRouter regardless of how it is
-spelled — which is how a bare ``claude-opus-5`` reached OpenRouter's API and 400'd on
+spelled — which is how a bare ``nvidia/nemotron-3-super-120b-a12b:free`` reached OpenRouter's API and 400'd on
 every agent call.
 """
 
@@ -80,7 +80,7 @@ def _gateway(*providers: BaseLLMProvider, max_retries: int = 3) -> LLMGateway:
     return gw
 
 
-async def _generate(gateway: LLMGateway, model: str = "claude-opus-5", **kwargs: Any):
+async def _generate(gateway: LLMGateway, model: str = "nvidia/nemotron-3-super-120b-a12b:free", **kwargs: Any):
     return await gateway.generate(model_name=model, system_prompt="S", user_prompt="U", **kwargs)
 
 
@@ -90,7 +90,7 @@ class TestRouting:
         openrouter = FakeProvider(ProviderName.OPENROUTER, supports=())
         router = ModelRouter([anthropic, openrouter])
 
-        assert router.resolve("claude-opus-5") is anthropic
+        assert router.resolve("nvidia/nemotron-3-super-120b-a12b:free") is anthropic
 
     def test_the_prefix_map_resolves_a_model_nobody_claims(self) -> None:
         # OpenAI's adapter claims gpt-, but suppose a registered provider does not:
@@ -113,13 +113,13 @@ class TestRouting:
         openrouter = FakeProvider(ProviderName.OPENROUTER, supports=())
         router = ModelRouter([openrouter])
 
-        assert router.resolve("claude-opus-5").provider_name is ProviderName.OPENROUTER
+        assert router.resolve("nvidia/nemotron-3-super-120b-a12b:free").provider_name is ProviderName.OPENROUTER
 
     def test_an_unroutable_model_raises_and_names_what_is_registered(self) -> None:
         router = ModelRouter([FakeProvider(ProviderName.OPENAI, supports=("gpt-",))])
 
         with pytest.raises(LookupError, match="openai"):
-            router.resolve("claude-opus-5")
+            router.resolve("nvidia/nemotron-3-super-120b-a12b:free")
 
     def test_the_registered_providers_are_reported(self) -> None:
         router = ModelRouter(
@@ -300,7 +300,7 @@ class TestRetries:
     async def test_exhausting_the_retries_raises_with_the_model_named(self) -> None:
         provider = FakeProvider(ProviderName.ANTHROPIC, supports=("claude",), fail_times=99)
 
-        with pytest.raises(RuntimeError, match="claude-opus-5"):
+        with pytest.raises(RuntimeError, match="nvidia/nemotron-3-super-120b-a12b:free"):
             await _generate(_gateway(provider, max_retries=2))
 
         assert len(provider.requests) == 2
@@ -323,23 +323,23 @@ class TestModelConfigSelection:
     def test_openrouter_alone_selects_prefixed_slugs(self) -> None:
         config = AgentModelConfig.for_providers([ProviderName.OPENROUTER])
 
-        assert config.manifest_agent == "anthropic/claude-opus-5"
-        assert config.report_agent == "anthropic/claude-opus-5"
+        assert config.manifest_agent == "anthropic/nvidia/nemotron-3-super-120b-a12b:free"
+        assert config.report_agent == "anthropic/nvidia/nemotron-3-super-120b-a12b:free"
 
     def test_anthropic_selects_the_bare_name(self) -> None:
         config = AgentModelConfig.for_providers([ProviderName.ANTHROPIC])
 
-        assert config.manifest_agent == "claude-opus-5"
+        assert config.manifest_agent == "nvidia/nemotron-3-super-120b-a12b:free"
 
     def test_anthropic_wins_when_both_are_registered(self) -> None:
         # The prompts were written against Claude, and the first-party API is the
         # shorter path to it.
         config = AgentModelConfig.for_providers([ProviderName.OPENROUTER, ProviderName.ANTHROPIC])
 
-        assert config.manifest_agent == "claude-opus-5"
+        assert config.manifest_agent == "nvidia/nemotron-3-super-120b-a12b:free"
 
     def test_openai_alone_selects_an_openai_model(self) -> None:
-        # Not claude-opus-5: with no Anthropic and no OpenRouter registered, that name
+        # Not nvidia/nemotron-3-super-120b-a12b:free: with no Anthropic and no OpenRouter registered, that name
         # resolves to nothing and every agent raises LookupError.
         config = AgentModelConfig.for_providers([ProviderName.OPENAI])
 
@@ -351,7 +351,7 @@ class TestModelConfigSelection:
         assert config.manifest_agent == "gemini-1.5-pro"
 
     def test_no_providers_falls_back_to_the_documented_default(self) -> None:
-        assert AgentModelConfig.for_providers([]).manifest_agent == "claude-opus-5"
+        assert AgentModelConfig.for_providers([]).manifest_agent == "nvidia/nemotron-3-super-120b-a12b:free"
 
     def test_every_agent_gets_a_model(self) -> None:
         config = AgentModelConfig.for_providers([ProviderName.OPENROUTER])
@@ -366,7 +366,7 @@ class TestModelConfigSelection:
 
         assert config.code_agent == "deepseek/deepseek-coder"
         # Only the one that was overridden moves.
-        assert config.manifest_agent == "anthropic/claude-opus-5"
+        assert config.manifest_agent == "anthropic/nvidia/nemotron-3-super-120b-a12b:free"
 
     def test_the_openrouter_preset_matches_provider_selection(self) -> None:
         # One source of truth for the slugs, so the preset cannot drift from the

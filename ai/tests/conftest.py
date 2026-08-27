@@ -145,7 +145,7 @@ def mock_llm_client():
     client.complete = AsyncMock(
         return_value=LLMResponse(
             content='{"test": "output"}',
-            model="claude-opus-5",
+            model="nvidia/nemotron-3-super-120b-a12b:free",
             provider=ModelProvider.ANTHROPIC,
             tokens_used=100,
             latency_ms=500,
@@ -279,7 +279,7 @@ def agent_config() -> AgentConfig:
     """Sample agent configuration."""
     return AgentConfig(
         name="test_agent",
-        model="claude-opus-5",
+        model="nvidia/nemotron-3-super-120b-a12b:free",
         temperature=0.1,
         max_tokens=4096,
         timeout_seconds=30,
@@ -296,7 +296,7 @@ def agent_result(agent_config) -> AgentResult:
         findings=[],
         execution_time_ms=1000,
         tokens_used=500,
-        model_name="claude-opus-5",
+        model_name="nvidia/nemotron-3-super-120b-a12b:free",
     )
 
 
@@ -305,7 +305,7 @@ def llm_config() -> LLMConfig:
     """Sample LLM configuration."""
     return LLMConfig(
         provider=ModelProvider.ANTHROPIC,
-        model="claude-opus-5",
+        model="nvidia/nemotron-3-super-120b-a12b:free",
         api_key="test_key",
         temperature=0.1,
         max_tokens=4096,

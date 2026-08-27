@@ -90,7 +90,7 @@ class ProbeAgent(BaseAgent[Out]):
     def __init__(self, llm_client: Any = None, **overrides: Any) -> None:
         defaults: dict[str, Any] = {
             "name": "probe_agent",
-            "model": "claude-opus-5",
+            "model": "nvidia/nemotron-3-super-120b-a12b:free",
             "temperature": 0.25,
             "max_tokens": 1024,
             "timeout_seconds": 42,
@@ -152,7 +152,7 @@ class TestWhatIsForwarded:
         await agent.execute(EVIDENCE, {})
 
         (call,) = gateway.calls
-        assert call["model_name"] == "claude-opus-5"
+        assert call["model_name"] == "nvidia/nemotron-3-super-120b-a12b:free"
         assert call["temperature"] == 0.25
         assert call["max_tokens"] == 1024
         assert call["timeout_s"] == 42.0

@@ -48,8 +48,8 @@ MODEL_REGISTRY: dict[str, ModelInfo] = {
     # Anthropic
     # Output ceilings are the streaming maxima — anything over ~16k output must
     # be streamed or the SDK's HTTP timeout fires before the response completes.
-    "claude-opus-5": ModelInfo(
-        id="claude-opus-5",
+    "nvidia/nemotron-3-super-120b-a12b:free": ModelInfo(
+        id="nvidia/nemotron-3-super-120b-a12b:free",
         name="Claude Opus 5",
         provider=ModelProvider.ANTHROPIC,
         capabilities=[
@@ -145,8 +145,8 @@ MODEL_REGISTRY: dict[str, ModelInfo] = {
     # OpenRouter prefixes the upstream id with the vendor slug. Its catalogue lags
     # first-party releases, so confirm the slug at
     # https://openrouter.ai/models before pointing a deployment at it.
-    "anthropic/claude-opus-5": ModelInfo(
-        id="anthropic/claude-opus-5",
+    "anthropic/nvidia/nemotron-3-super-120b-a12b:free": ModelInfo(
+        id="anthropic/nvidia/nemotron-3-super-120b-a12b:free",
         name="Claude Opus 5 (OpenRouter)",
         provider=ModelProvider.OPENROUTER,
         capabilities=[
@@ -222,14 +222,14 @@ MODEL_REGISTRY: dict[str, ModelInfo] = {
 
 # Task-specific model recommendations
 TASK_MODEL_MAP = {
-    "manifest_analysis": ["claude-opus-5", "anthropic/claude-opus-5", "gpt-4o"],
-    "permission_analysis": ["claude-opus-5", "anthropic/claude-opus-5", "gpt-4o"],
-    "code_analysis": ["claude-opus-5", "deepseek/deepseek-coder", "gpt-4o"],
-    "api_analysis": ["claude-opus-5", "deepseek/deepseek-coder", "gpt-4o"],
-    "network_analysis": ["claude-opus-5", "anthropic/claude-opus-5", "gpt-4o"],
-    "threat_intel": ["claude-opus-5", "anthropic/claude-opus-5", "gpt-4o"],
-    "risk_scoring": ["claude-opus-5", "anthropic/claude-opus-5", "gpt-4o"],
-    "report_generation": ["claude-opus-5", "anthropic/claude-opus-5", "gpt-4o"],
+    "manifest_analysis": ["nvidia/nemotron-3-super-120b-a12b:free", "anthropic/nvidia/nemotron-3-super-120b-a12b:free", "gpt-4o"],
+    "permission_analysis": ["nvidia/nemotron-3-super-120b-a12b:free", "anthropic/nvidia/nemotron-3-super-120b-a12b:free", "gpt-4o"],
+    "code_analysis": ["nvidia/nemotron-3-super-120b-a12b:free", "deepseek/deepseek-coder", "gpt-4o"],
+    "api_analysis": ["nvidia/nemotron-3-super-120b-a12b:free", "deepseek/deepseek-coder", "gpt-4o"],
+    "network_analysis": ["nvidia/nemotron-3-super-120b-a12b:free", "anthropic/nvidia/nemotron-3-super-120b-a12b:free", "gpt-4o"],
+    "threat_intel": ["nvidia/nemotron-3-super-120b-a12b:free", "anthropic/nvidia/nemotron-3-super-120b-a12b:free", "gpt-4o"],
+    "risk_scoring": ["nvidia/nemotron-3-super-120b-a12b:free", "anthropic/nvidia/nemotron-3-super-120b-a12b:free", "gpt-4o"],
+    "report_generation": ["nvidia/nemotron-3-super-120b-a12b:free", "anthropic/nvidia/nemotron-3-super-120b-a12b:free", "gpt-4o"],
     "fast_classification": ["claude-haiku-4-5", "gpt-4o-mini", "meta-llama/llama-3.1-70b-instruct"],
 }
 
