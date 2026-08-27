@@ -72,7 +72,7 @@ BANKING_TARGET_KEYWORDS = [
 class NetworkAgent(BaseAgent[NetworkAnalysis]):
     """Analyzes network IOCs, connections, certificates, and TLS configuration."""
 
-    def __init__(self, llm_client: Any = None):
+    def __init__(self, llm_client: Any = None, knowledge: Any = None):
         config = AgentConfig(
             name="network_agent",
             model="claude-opus-5",
@@ -81,7 +81,7 @@ class NetworkAgent(BaseAgent[NetworkAnalysis]):
             output_schema=NetworkAnalysis,
             system_prompt=self._get_system_prompt(),
         )
-        super().__init__(config, llm_client)
+        super().__init__(config, llm_client, knowledge)
 
     def _get_system_prompt(self) -> str:
         return """You are a senior network security analyst specializing in Android malware traffic analysis.

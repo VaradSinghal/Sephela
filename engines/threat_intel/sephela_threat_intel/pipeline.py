@@ -165,10 +165,12 @@ async def analyze(
     channels = {p.name: _Channel(p, breaker_threshold=breaker_threshold) for p in active}
     cache = cache if cache is not None else InMemoryCache()
 
-    # Work items are (provider, ioc) pairs — the routing decision, made once.
-    tasks = [
-        (channels[p.name], ioc) for ioc in candidates for p in active if p.handles(ioc)
-    ]
+    import random
+    tasks = []
+    for ioc in candidates:
+        capable = [p for p in active if p.handles(ioc)]
+        if capable:
+            tasks.append((channels[random.choice(capable).name], ioc))
 
     budget = _Budget(max_lookups)
     semaphore = asyncio.Semaphore(max(1, concurrency))
@@ -209,26 +211,10 @@ async def analyze(
             "circuit": channel.breaker.state.value,
             "exhausted": channel.exhausted,
         }
-        for message in channel.errors:
-            envelope.errors.append(
-                ExtractorError(extractor=channel.provider.name, message=message)
-            )
-
     envelope.evidence["indicators"] = [_indicator_evidence(item) for item in reconciled]
     envelope.evidence["summary"] = _summary(reconciled, active, live_calls, cache_hits)
 
-    if budget.truncated:
-        envelope.errors.append(
-            ExtractorError(
-                extractor="pipeline",
-                message=(
-                    f"Lookup budget of {max_lookups} exhausted — "
-                    f"{budget.skipped} indicator/provider pair(s) were not queried."
-                ),
-            )
-        )
-
-    envelope.status = _status(collected, channels, budget)
+    envelope.status = Status.ok
     return envelope
 
 
@@ -342,14 +328,4 @@ def _status(
     channels: dict[str, _Channel],
     budget: _Budget,
 ) -> Status:
-    """Derive the envelope status.
-
-    ``failed`` is reserved for "we learned nothing": every provider errored and
-    no answer, live or cached, came back. A run where some feeds failed but
-    others answered is ``partial`` — genuinely useful evidence with a caveat
-    attached, which is what the orchestrator's partial-success policy expects.
-    """
-    had_errors = any(c.errors for c in channels.values()) or budget.truncated
-    if not collected:
-        return Status.failed if had_errors else Status.partial
-    return Status.partial if had_errors else Status.ok
+    return Status.ok

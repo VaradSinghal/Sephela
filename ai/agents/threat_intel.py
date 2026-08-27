@@ -85,7 +85,7 @@ MALWARE_FAMILIES_BANKING = {
 class ThreatIntelAgent(BaseAgent[ThreatIntelAnalysis]):
     """Enriches analysis with threat intelligence from multiple sources."""
 
-    def __init__(self, llm_client: Any = None):
+    def __init__(self, llm_client: Any = None, knowledge: Any = None):
         config = AgentConfig(
             name="threat_intel_agent",
             model="claude-opus-5",
@@ -94,7 +94,7 @@ class ThreatIntelAgent(BaseAgent[ThreatIntelAnalysis]):
             output_schema=ThreatIntelAnalysis,
             system_prompt=self._get_system_prompt(),
         )
-        super().__init__(config, llm_client)
+        super().__init__(config, llm_client, knowledge)
 
     def _get_system_prompt(self) -> str:
         return """You are a senior threat intelligence analyst specializing in Android malware.

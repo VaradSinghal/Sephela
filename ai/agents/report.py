@@ -51,7 +51,7 @@ def _finding_detail(finding: Any) -> dict[str, Any]:
 class ReportAgent(BaseAgent[ReportGenerationResult]):
     """Generates comprehensive analysis reports from all agent outputs."""
 
-    def __init__(self, llm_client: Any = None):
+    def __init__(self, llm_client: Any = None, knowledge: Any = None):
         config = AgentConfig(
             name="report_agent",
             model="claude-opus-5",
@@ -60,7 +60,7 @@ class ReportAgent(BaseAgent[ReportGenerationResult]):
             output_schema=ReportGenerationResult,
             system_prompt=self._get_system_prompt(),
         )
-        super().__init__(config, llm_client)
+        super().__init__(config, llm_client, knowledge)
 
     def _get_system_prompt(self) -> str:
         return """You are a senior security analyst writing executive and technical malware analysis reports.

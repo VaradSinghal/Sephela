@@ -149,11 +149,11 @@ class Settings(BaseSettings):
     # it would fail every job on a fresh deployment rather than degrade.
     static_enabled: bool = True
     code_intel_enabled: bool = True
-    ai_enabled: bool = False
+    ai_enabled: bool = True
     scoring_enabled: bool = True
     reporting_enabled: bool = True
     rag_enabled: bool = False
-    multi_agent_enabled: bool = False
+    multi_agent_enabled: bool = True
 
     # ---- Observability (OpenTelemetry + Prometheus) ----
     otel_enabled: bool = False
