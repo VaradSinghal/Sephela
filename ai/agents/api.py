@@ -220,7 +220,7 @@ DANGEROUS_API_SIGNATURES = {
 class APIAgent(BaseAgent[APIAnalysis]):
     """Analyzes dangerous API usage patterns with context and data flow."""
 
-    def __init__(self, llm_client: Any = None):
+    def __init__(self, llm_client: Any = None, knowledge: Any = None):
         config = AgentConfig(
             name="api_agent",
             model="claude-opus-5",
@@ -229,7 +229,7 @@ class APIAgent(BaseAgent[APIAnalysis]):
             output_schema=APIAnalysis,
             system_prompt=self._get_system_prompt(),
         )
-        super().__init__(config, llm_client)
+        super().__init__(config, llm_client, knowledge)
 
     def _get_system_prompt(self) -> str:
         return """You are a senior Android security analyst specializing in API usage analysis.

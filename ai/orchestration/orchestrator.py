@@ -269,18 +269,18 @@ def make_agent_node(
                 output_dict: dict[str, Any] | None = None
                 if result.output is not None:
                     output_dict = (
-                        result.output.model_dump()
+                        result.output.model_dump(mode='json')
                         if hasattr(result.output, "model_dump")
                         else dict(result.output)
                     )
 
                 new_findings = [
-                    f.model_dump() if hasattr(f, "model_dump") else dict(f)
+                    f.model_dump(mode='json') if hasattr(f, "model_dump") else dict(f)
                     for f in (result.findings or [])
                 ]
 
                 errors_list = [
-                    e.model_dump() if hasattr(e, "model_dump") else {"message": str(e)}
+                    e.model_dump(mode='json') if hasattr(e, "model_dump") else {"message": str(e)}
                     for e in (result.errors or [])
                 ]
 
@@ -449,7 +449,7 @@ def make_risk_node(
                 output_dict: dict[str, Any] | None = None
                 if result.output is not None:
                     output_dict = (
-                        result.output.model_dump()
+                        result.output.model_dump(mode='json')
                         if hasattr(result.output, "model_dump")
                         else dict(result.output)
                     )
@@ -467,7 +467,7 @@ def make_risk_node(
                     output=output_dict,
                     findings=[],
                     errors=[
-                        e.model_dump() if hasattr(e, "model_dump") else {"message": str(e)}
+                        e.model_dump(mode='json') if hasattr(e, "model_dump") else {"message": str(e)}
                         for e in (result.errors or [])
                     ],
                     execution_time_ms=exec_ms,
@@ -579,7 +579,7 @@ def make_report_node(
                 output_dict: dict[str, Any] | None = None
                 if result.output is not None:
                     output_dict = (
-                        result.output.model_dump()
+                        result.output.model_dump(mode='json')
                         if hasattr(result.output, "model_dump")
                         else dict(result.output)
                     )
@@ -597,7 +597,7 @@ def make_report_node(
                     output=output_dict,
                     findings=[],
                     errors=[
-                        e.model_dump() if hasattr(e, "model_dump") else {"message": str(e)}
+                        e.model_dump(mode='json') if hasattr(e, "model_dump") else {"message": str(e)}
                         for e in (result.errors or [])
                     ],
                     execution_time_ms=exec_ms,

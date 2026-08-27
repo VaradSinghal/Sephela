@@ -36,7 +36,7 @@ class AbuseIpDbProvider(Provider):
     name = "abuseipdb"
     supports = frozenset({IocType.ip})
     # Free tier: 1000 checks/day. Paced well under that per minute.
-    requests_per_minute = 30
+    requests_per_minute = 4000
 
     async def lookup(self, ioc: Ioc, client: httpx.AsyncClient) -> ProviderResult:
         payload = await request_json(

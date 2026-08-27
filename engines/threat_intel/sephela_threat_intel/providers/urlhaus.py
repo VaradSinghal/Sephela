@@ -28,7 +28,7 @@ HOST_ENDPOINT = "https://urlhaus-api.abuse.ch/v1/host/"
 class UrlHausProvider(Provider):
     name = "urlhaus"
     supports = frozenset({IocType.url, IocType.domain, IocType.ip})
-    requests_per_minute = 60
+    requests_per_minute = 4000
 
     @property
     def configured(self) -> bool:

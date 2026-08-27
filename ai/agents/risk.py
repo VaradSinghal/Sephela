@@ -29,7 +29,7 @@ _ENGINE = RiskScoringEngine()
 class RiskAgent(BaseAgent[RiskAnalysis]):
     """Computes explainable risk score from all agent findings."""
 
-    def __init__(self, llm_client: Any = None):
+    def __init__(self, llm_client: Any = None, knowledge: Any = None):
         config = AgentConfig(
             name="risk_agent",
             model="claude-opus-5",
@@ -38,7 +38,7 @@ class RiskAgent(BaseAgent[RiskAnalysis]):
             output_schema=RiskAnalysis,
             system_prompt=self._get_system_prompt(),
         )
-        super().__init__(config, llm_client)
+        super().__init__(config, llm_client, knowledge)
 
     def _get_system_prompt(self) -> str:
         return """You are a senior risk analyst specializing in Android malware risk scoring.

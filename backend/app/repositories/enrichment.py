@@ -131,7 +131,9 @@ class EnrichmentCacheRepository:
                     expires_at=now + timedelta(seconds=effective_ttl),
                 )
             )
-            await self.session.flush()
+            # Removed await self.session.flush() to prevent "Session is already flushing" 
+            # deadlocks under high concurrency. iocs are deduped by the engine so get()
+            # never needs to see rows added by put() in the same run.
 
 
 class EnrichmentRepository:

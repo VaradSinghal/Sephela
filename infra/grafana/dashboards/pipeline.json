@@ -1,0 +1,23 @@
+{
+  "title": "Sephela Pipeline Overview",
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "API Requests",
+      "targets": [
+        {
+          "expr": "rate(http_requests_total[5m])",
+          "refId": "A"
+        }
+      ],
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      }
+    }
+  ],
+  "schemaVersion": 38,
+  "timezone": "browser"
+}
